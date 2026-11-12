@@ -11,17 +11,18 @@ apps/
 backend/
   app/
     api/                  HTTP routes
-    core/                 Environment and configuration
+    config.py             Environment and configuration
+    db/                   PostgreSQL connection
   migrations/             Alembic revisions
   tests/                  FastAPI tests
-  requirements.txt        Backend dependencies
-  requirements-dev.txt    Backend dependencies plus test tools
+  pyproject.toml          Backend and test dependencies
 docs/
-  database.md             PostgreSQL and migration workflow
-  api-contracts.md        Current API contract
+  database-decision.md             PostgreSQL and migration workflow
+  api-contract.md        Current API contract
   contributing.md        Jira branches and pull requests
 .env.example              Local environment template
 compose.yaml              Local PostgreSQL service
+.github/workflows/ci.yml  Pull request checks
 package.json              Frontend workspace scripts
 package-lock.json         Shared frontend dependency lockfile
 ```
@@ -38,7 +39,7 @@ npm ci
 cd backend
 python3.12 -m venv .venv
 . .venv/bin/activate
-python -m pip install -r requirements-dev.txt
+python -m pip install -e '.[dev]'
 cd ..
 ```
 
@@ -63,7 +64,7 @@ If you open a new terminal for the backend, activate its virtual environment aga
 | `npm run dev:operator` | [Operator dashboard](http://127.0.0.1:5174) |
 | Backend command above | [Health](http://127.0.0.1:8000/health) and [OpenAPI docs](http://127.0.0.1:8000/docs) |
 
-Expect one starter heading per app and `{"status":"ok"}` from the API. The apps and API liveness check also run without PostgreSQL. See the [database guide](docs/database.md) for the migration check and port configuration.
+Expect one starter heading per app and `{"status":"ok"}` from the API. The apps and API liveness check also run without PostgreSQL. See the [database guide](docs/database-decision.md) for the migration check and port configuration.
 
 ## Batch 3 · Run checks and start your Jira task
 
@@ -73,5 +74,7 @@ npm run build
 cd backend
 python -m pytest
 ```
+
+The PostgreSQL test skips unless you set `TEST_DATABASE_URL`. Pull request checks start a fresh database and run the test. See the [database guide](docs/database-decision.md) for local instructions.
 
 Follow the [branch and pull request workflow](docs/contributing.md) using your existing Jira sprint and issue.

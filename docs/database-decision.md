@@ -16,3 +16,17 @@ The starting revision is `0001 (head)`. It establishes migration tracking. Defin
 For a schema change, run `python -m alembic revision -m "describe the change"` and fill in the generated upgrade and downgrade functions. Test the migration against a disposable local database. Keep one migration head. When two schema branches overlap, coordinate their revision order during review. Include the migration in the same pull request as its model changes.
 
 Run `docker compose down` from the root to stop PostgreSQL and retain local data. Remove its volume only when you intend to erase the local database. The sample values in `.env.example` are for local development. Keep private values in your environment.
+
+## Run the database test
+
+With the Compose database running, load the local settings from the repo root. Use a development database for this check. The test checks the migration revision and writes only to a temporary table.
+
+```sh
+set -a
+. ./.env
+set +a
+export TEST_DATABASE_URL="$DATABASE_URL"
+cd backend
+python -m alembic upgrade head
+python -m pytest tests/test_db.py
+```
