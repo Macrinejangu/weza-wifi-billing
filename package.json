@@ -1,0 +1,12 @@
+{
+  "name": "weza-wifi-billing",
+  "private": true,
+  "engines": { "node": "^22.12.0 || ^24.0.0" },
+  "workspaces": ["apps/customer-portal", "apps/operator-dashboard"],
+  "scripts": {
+    "dev:customer": "npm run dev --workspace @weza/customer-portal",
+    "dev:operator": "npm run dev --workspace @weza/operator-dashboard",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces"
+  }
+}
