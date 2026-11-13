@@ -8,9 +8,11 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
   const [supportOpen, setSupportOpen] = useState(false)
   const [message, setMessage] = useState('')
 
+  // Keep references so keyboard focus can enter the dialog and return to its trigger.
   const supportTriggerRef = useRef(null)
   const supportDialogRef = useRef(null)
 
+  // Manage dialog focus, contain keyboard navigation, and support Escape to close.
   useEffect(() => {
     if (!supportOpen) {
       supportTriggerRef.current?.focus()
@@ -57,6 +59,7 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [supportOpen])
 
+  // Authentication is intentionally pending backend integration; credentials are not sent.
   function handleSubmit(event) {
     event.preventDefault()
     setMessage(

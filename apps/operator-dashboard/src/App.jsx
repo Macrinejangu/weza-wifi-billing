@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 export default function App() {
+  // This preview is for frontend review only; it does not create an authenticated session.
   const [showDashboardPreview, setShowDashboardPreview] = useState(false)
 
   if (showDashboardPreview) {

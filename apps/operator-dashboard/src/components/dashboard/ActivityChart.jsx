@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+// Static illustrative figures; replace with API data when the backend is integrated.
 const chartData = {
   revenue: {
     label: 'Revenue',
@@ -17,6 +18,7 @@ const chartData = {
 
 const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Convert metric values into coordinates for the SVG line chart.
 function createPoints(values) {
   const min = Math.min(...values) * 0.85
   const max = Math.max(...values) * 1.05
@@ -30,6 +32,7 @@ function createPoints(values) {
 }
 
 export default function ActivityChart() {
+  // Switch between the two illustrative metrics displayed by the chart.
   const [metric, setMetric] = useState('revenue')
 
   const data = chartData[metric]
@@ -72,15 +75,15 @@ export default function ActivityChart() {
           </button>
         </div>
 
-      <label className="date-range-control">
-        <span     className="material-symbols-outlined">calendar_month</span>
-       <select
-           value="7 days"
-           aria-label="Chart date range"
-           disabled
-      >
-              <option value="7 days">Last 7 Days</option>
-            </select>
+        <label className="date-range-control">
+          <span className="material-symbols-outlined">calendar_month</span>
+          <select
+            value="7 days"
+            aria-label="Chart date range"
+            disabled
+          >
+            <option value="7 days">Last 7 Days</option>
+          </select>
         </label>
 
       </div>

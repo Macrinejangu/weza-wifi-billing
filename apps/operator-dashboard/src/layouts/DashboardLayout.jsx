@@ -6,6 +6,7 @@ import Header from '../components/navigation/Header.jsx'
 export default function DashboardLayout({ children, operator }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
+  // Allow the mobile navigation drawer to close with the Escape key.
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
