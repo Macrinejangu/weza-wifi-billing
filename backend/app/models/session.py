@@ -14,6 +14,11 @@ class WiFiSession(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
-    status = Column(String(20), default="pending", nullable=False)
+    status = Column(
+    String(30),
+    default="PENDING_PAYMENT",
+    nullable=False
+)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
     
