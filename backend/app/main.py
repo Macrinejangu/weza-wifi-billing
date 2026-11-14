@@ -6,3 +6,7 @@ app = FastAPI(title="Weza WiFi Billing API")
 
 app.include_router(health_router)
 app.include_router(packages_router, prefix="/api")
+
+@app.get("/")
+def home():
+    return {"message": "Weza Wi-Fi Billing API is running"}
