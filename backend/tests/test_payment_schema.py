@@ -21,9 +21,17 @@ from app.schemas.payment import PaymentRequest
 )
 
 def test_valid_numbers_are_normalised(raw_number):
-   request=PaymentRequest(purchase_id=1, phone_number="0112345678")
+    request = PaymentRequest(purchase_id=1, phone_number=raw_number)
 
-   assert request.phone_number == "254112345678"
+    # Whatever the customer typed, downstream code sees one canonical form.
+    assert request.phone_number == "254712345678"
+
+
+def test_01_prefixed_numbers_are_accepted():
+    request = PaymentRequest(purchase_id=1, phone_number="0112345678")
+
+    assert request.phone_number == "254112345678"
+    
 
 @pytest.mark.parametrize(
    "bad_number",
