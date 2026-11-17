@@ -1,5 +1,4 @@
-
-
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&display=swap");
 @import "tailwindcss";
 
 /* ================================
@@ -7,6 +6,7 @@
 ================================ */
 
 :root {
+  --weza-font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --weza-lavender: #77709D;
   --weza-lime: #D9E52E;
   --weza-light-lavender: #F0EEF6;
@@ -23,7 +23,7 @@
 }
 
 body {
-  font-family: Arial, sans-serif;
+  font-family: var(--weza-font);
   background: var(--weza-background);
   color: var(--weza-text);
 }
@@ -963,12 +963,7 @@ a {
 }
 
 :root {
-  --weza-font: "Avenir Next", system-ui, sans-serif;
   --weza-muted: #655f75;
-}
-
-body {
-  font-family: var(--weza-font);
 }
 
 .public-welcome {
