@@ -1,153 +1,62 @@
-
-
-import { useState } from 'react'
-import {
-  Smartphone,
-  ArrowUpRight,
-  Receipt,
-  CheckCircle2
-} from 'lucide-react'
+import { ArrowRight, Receipt } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const recentPayments = [
-  {
-    reference: 'WEZA001',
-    date: '10 Nov 2026',
-    method: 'M-Pesa',
-    amount: 250,
-    status: 'Successful'
-  },
-  {
-    reference: 'WEZA002',
-    date: '05 Nov 2026',
-    method: 'M-Pesa',
-    amount: 50,
-    status: 'Successful'
-  }
+  { reference: 'WEZA001', packageName: 'Weekly Plus', date: '10 Nov 2026', amount: 250, status: 'Paid' },
+  { reference: 'WEZA002', packageName: 'Daily Connect', date: '05 Nov 2026', amount: 50, status: 'Paid' },
+  { reference: 'WEZA003', packageName: 'Quick Connect', date: '04 Nov 2026', amount: 10, status: 'Failed' },
+  { reference: 'WEZA004', packageName: 'Daily Connect', date: '03 Nov 2026', amount: 50, status: 'Pending' },
 ]
 
+const statusStyles = {
+  Paid: 'bg-lime-100 text-lime-900',
+  Failed: 'bg-red-100 text-red-900',
+  Pending: 'bg-amber-100 text-amber-900',
+}
+
 export default function Payments() {
-  const [phone, setPhone] = useState('')
-  const [amount, setAmount] = useState('')
-  const [message, setMessage] = useState('')
-
-  function handlePayment(event) {
-    event.preventDefault()
-
-    if (!phone || !amount) {
-      setMessage('Please enter your phone number and amount.')
-      return
-    }
-
-    setMessage(
-      'Your details are ready. M-Pesa payment processing will be connected through the backend.'
-    )
-  }
-
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <p className="hero-eyebrow">PAYMENTS.INSTANT HOTSPOT ACCESS</p>
-        <h1>More connection is a tap away</h1>
-        <p>Manage your payments and keep your connection active.</p>
-      </div>
+      <header className="page-heading">
+        <h1>Payments</h1>
+        <p>Review your M-Pesa payment history.</p>
+      </header>
 
-      <div className="payment-layout">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <section className="rounded-2xl border border-[#edece8] bg-white p-4 sm:p-6">
+          <h2 className="text-lg font-bold">Recent payments</h2>
+          <p className="mt-1 text-sm text-[#655f75]">Sample transactions</p>
 
-        <section className="payment-card">
-          <div className="payment-title">
-            <div className="payment-icon">
-              <Smartphone size={23} />
-            </div>
+          <ul className="mt-3 divide-y divide-[#edece8]">
+            {recentPayments.map((payment) => (
+              <li className="flex flex-wrap items-start justify-between gap-3 py-4" key={payment.reference}>
+                <div className="flex min-w-0 items-start gap-2">
+                  <Receipt size={18} className="mt-0.5 shrink-0 text-[#585172]" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-semibold">{payment.packageName}</p>
+                    <p className="mt-1 text-xs text-[#655f75]">{payment.date} · M-Pesa · {payment.reference}</p>
+                  </div>
+                </div>
 
-            <div>
-              <h2>Pay with M-Pesa</h2>
-              <p>Enter your details to make a payment.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handlePayment}>
-            <label htmlFor="phone">M-Pesa phone number</label>
-
-            <input
-              id="phone"
-              type="tel"
-              placeholder="07XXXXXXXX"
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              required
-            />
-
-            <label htmlFor="amount">Amount (KSh)</label>
-
-            <input
-              id="amount"
-              type="number"
-              placeholder="Enter amount"
-              min="1"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              required
-            />
-
-            <button type="submit" className="package-button">
-              Continue <ArrowUpRight size={17} />
-            </button>
-          </form>
-
-          {message && (
-            <p className="payment-message" role="status">
-              {message}
-            </p>
-          )}
+                <div className="flex flex-col items-start gap-1 sm:items-end">
+                  <strong className="text-sm">KES {payment.amount.toLocaleString('en-KE')}</strong>
+                  <span className={`rounded-full px-2 py-1 text-xs font-semibold ${statusStyles[payment.status]}`}>
+                    {payment.status}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
         </section>
 
-        <section className="payment-info-card">
-          <div className="payment-icon">
-            <Receipt size={23} />
-          </div>
-
-          <h2>Payment information</h2>
-          <p>
-            Your payments will be processed securely through
-            M-Pesa once the payment integration is connected.
-          </p>
-
-          <div className="payment-note">
-            <CheckCircle2 size={18} />
-            <span>M-Pesa payment option</span>
-          </div>
+        <section className="rounded-2xl border border-[#edece8] bg-white p-4 sm:p-6">
+          <h2 className="text-lg font-bold">Buy a package</h2>
+          <p className="mt-2 text-sm leading-6 text-[#655f75]">Choose a package to see its price and open M-Pesa checkout.</p>
+          <Link to="/packages" className="package-button">
+            Browse packages <ArrowRight size={17} aria-hidden="true" />
+          </Link>
         </section>
-
       </div>
-
-      <section className="recent-payments">
-        <div className="section-heading">
-          <div>
-            <h2>Recent payments</h2>
-            <p>Review your previous transactions.</p>
-          </div>
-        </div>
-
-        {recentPayments.map((payment) => (
-          <div className="transaction-row" key={payment.reference}>
-            <div className="transaction-icon">
-              <Receipt size={19} />
-            </div>
-
-            <div className="transaction-details">
-              <strong>{payment.reference}</strong>
-              <p>{payment.date} · {payment.method}</p>
-            </div>
-
-            <div className="transaction-amount">
-              <strong>
-                KSh {payment.amount.toLocaleString()}
-              </strong>
-              <span>{payment.status}</span>
-            </div>
-          </div>
-        ))}
-      </section>
     </div>
   )
 }

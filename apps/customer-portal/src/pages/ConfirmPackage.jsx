@@ -1,138 +1,86 @@
-
+import { ArrowLeft, ArrowRight, Smartphone, Wifi } from 'lucide-react'
 import { useState } from 'react'
-import { useLocation, useNavigate, Link } from 'react-router-dom'
-import { Wifi, Smartphone, ArrowLeft, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
 
 export default function ConfirmPackage() {
-  const location = useLocation()
-  const navigate = useNavigate()
-
-  const selectedPackage = location.state?.selectedPackage
-
-  const [phone, setPhone] = useState('')
-  const [message, setMessage] = useState('')
-
-  if (!selectedPackage) {
-    return (
-      <div className="page-content">
-        <h1>No package selected</h1>
-        <p>Please choose an internet package first.</p>
-        <Link to="/packages" className="package-button">
-          Browse packages
-        </Link>
-      </div>
-    )
-  }
+  const { state } = useLocation()
+  const selectedPackage = state?.selectedPackage
+  const [feedback, setFeedback] = useState(null)
 
   function handlePayment(event) {
     event.preventDefault()
+    const phone = new FormData(event.currentTarget).get('phone').replace(/\s/g, '')
 
-    if (!/^(\+254|254|0)7\d{8}$/.test(phone.trim())) {
-      setMessage('Please enter a valid Kenyan mobile number.')
+    if (!/^(?:\+254|254|0)[17]\d{8}$/.test(phone)) {
+      setFeedback({ text: 'Enter a Kenyan mobile number, for example 0712 345 678.', error: true })
       return
     }
 
-    // Payment integration will be connected to the backend.
-    setMessage('Your package is ready. M-Pesa integration is the next step.')
+    setFeedback({ text: 'This is a preview. No M-Pesa prompt was sent.', error: false })
   }
 
   return (
-    <div className="page-content">
+    <div className="mx-auto w-full max-w-lg">
+      <Link to="/packages" className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#585172]">
+        <ArrowLeft size={16} aria-hidden="true" /> Back to packages
+      </Link>
 
-      <div className="page-heading">
-        <p className="hero-eyebrow">PACKAGE CHECKOUT</p>
-        <h1>Confirm your package</h1>
-        <p>Review your selection before proceeding with payment.</p>
-      </div>
+      <header className="page-heading">
+        <h1>{selectedPackage ? 'Confirm your package' : 'No package selected'}</h1>
+        <p>{selectedPackage ? 'Review your package and enter your M-Pesa number.' : 'Choose a package before opening checkout.'}</p>
+      </header>
 
-      <div className="payment-layout">
-
-        {/* Package summary */}
-        <section className="payment-card">
-          <div className="payment-title">
-            <div className="payment-icon">
-              <Wifi size={23} />
+      {selectedPackage && (
+        <section className="rounded-2xl border border-[#edece8] bg-white p-4 sm:p-6">
+          <div className="rounded-xl bg-[#f4f3f0] p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Wifi size={21} className="shrink-0 text-[#585172]" aria-hidden="true" />
+                <h2 className="text-base font-bold">{selectedPackage.name}</h2>
+              </div>
+              <strong className="text-lg">KES {selectedPackage.price.toLocaleString('en-KE')}</strong>
             </div>
-            <div>
-              <h2>{selectedPackage.name} Package</h2>
-              <p>{selectedPackage.description}</p>
-            </div>
+            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-[#655f75]">Data allowance</dt>
+                <dd className="font-semibold">{selectedPackage.data}</dd>
+              </div>
+              <div>
+                <dt className="text-[#655f75]">Validity</dt>
+                <dd className="font-semibold">{selectedPackage.duration}</dd>
+              </div>
+            </dl>
           </div>
 
-          <div className="package-detail">
-            <span>Data allowance</span>
-            <strong>{selectedPackage.data}</strong>
-          </div>
-
-          <div className="package-detail">
-            <span>Validity</span>
-            <strong>{selectedPackage.duration}</strong>
-          </div>
-
-          <div className="package-detail">
-            <span>Payment method</span>
-            <strong>M-Pesa</strong>
-          </div>
-
-          <div className="package-price">
-            <h3>KSh {selectedPackage.price.toLocaleString()}</h3>
-            <span>Total amount</span>
-          </div>
-        </section>
-
-        {/* Payment details */}
-        <section className="payment-card">
-          <div className="payment-title">
-            <div className="payment-icon">
-              <Smartphone size={23} />
-            </div>
-            <div>
-              <h2>M-Pesa payment</h2>
-              <p>Enter the number to receive your payment prompt.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handlePayment}>
-            <label htmlFor="phone">M-Pesa phone number</label>
+          <form onSubmit={handlePayment} className="mt-6">
+            <label htmlFor="checkout-phone" className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              <Smartphone size={17} aria-hidden="true" /> M-Pesa phone number
+            </label>
             <input
-              id="phone"
+              id="checkout-phone"
+              name="phone"
               type="tel"
-              placeholder="07XXXXXXXX"
-              value={phone}
-              onChange={(event) => {
-                setPhone(event.target.value)
-                setMessage('')
-              }}
+              autoComplete="tel"
+              placeholder="0712 345 678"
+              aria-describedby="checkout-help"
+              aria-invalid={feedback?.error || undefined}
+              onChange={() => setFeedback(null)}
               required
+              className="min-h-11 w-full rounded-lg border border-[#edece8] bg-[#f4f3f0] px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#726b91]"
             />
+            <p id="checkout-help" className="mt-2 text-sm text-[#655f75]">Use a sample number for this preview.</p>
 
             <button type="submit" className="package-button">
-              Confirm and Pay <ArrowRight size={17} />
+              Preview M-Pesa payment <ArrowRight size={17} aria-hidden="true" />
             </button>
+            {feedback && (
+              <p role={feedback.error ? 'alert' : 'status'} className={feedback.error ? 'mt-3 text-sm text-red-700' : 'mt-3 text-sm text-[#585172]'}>
+                {feedback.text}
+              </p>
+            )}
           </form>
-
-          {message && (
-            <p className="payment-message" role="status">
-              {message}
-            </p>
-          )}
-
-          <div className="payment-note">
-            <ShieldCheck size={18} />
-            <span>Secure M-Pesa payment</span>
-          </div>
         </section>
-
-      </div>
-
-      <button
-        onClick={() => navigate('/packages')}
-        className="mt-5 flex items-center gap-2 text-sm font-semibold text-[#77709D]"
-      >
-        <ArrowLeft size={16} />
-        Back to packages
-      </button>
-
+      )}
     </div>
   )
 }
