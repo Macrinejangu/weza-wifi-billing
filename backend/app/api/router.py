@@ -14,10 +14,25 @@ router = APIRouter()
 
 @router.get("/router/status")
 def router_status(x_weza_api_key: str | None = Header(default=None)):
-    expected_key = weza_api_key()
+    if not x_weza_api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key",
+        )
 
-    if not x_weza_api_key or not compare_digest(
-        x_weza_api_key, expected_key
+    try:
+        expected_key = weza_api_key()
+    except RuntimeError:
+        logger.error("WEZA_API_KEY is not configured")
+        raise HTTPException(
+            status_code=503,
+            detail="Router status service is not configured",
+        ) from None
+
+
+    if not compare_digest(
+        x_weza_api_key.encode("utf-8"),
+        expected_key.encode("utf-8"),
     ):
         raise HTTPException(
             status_code=401,

@@ -78,3 +78,44 @@ python -m pytest
 The PostgreSQL test skips unless you set `TEST_DATABASE_URL`. Pull request checks start a fresh database and run the test. See the [database guide](docs/database-decision.md) for local instructions.
 
 Follow the [branch and pull request workflow](docs/contributing.md) using your existing Jira sprint and issue.
+
+## Optional router connectivity check
+
+The `/router/status` endpoint checks whether the backend reaches the
+configured MikroTik router and reads its identity.
+
+Add the following settings to your existing local `.env`. Refer to
+`.env.example` for the variable names.
+
+- `WEZA_API_KEY`: a private key callers supply to the status endpoint.
+- `ROUTER_HOST`: the test router's hostname or IP address.
+- `ROUTER_USERNAME`: the router account username.
+- `ROUTER_PASSWORD`: the router account password.
+- `ROUTER_PORT`: defaults to `8728`.
+- `ROUTER_TIMEOUT`: connection timeout in seconds, defaults to `5`.
+
+Keep real credentials in your local `.env`.
+
+The current connection uses the plain RouterOS API. Confirm the lab's
+network protection with the router owner. Deployment requires an agreed
+secure connection setup.
+
+With the backend running, open its `/docs` page, expand
+`GET /router/status`, select “Try it out”, and enter your `WEZA_API_KEY`
+in the `x-weza-api-key` field.
+
+Expected responses:
+
+- `200`: the router identity request succeeded.
+- `401`: the supplied API key is missing or incorrect.
+- `503`: the server API key is unconfigured, or the router connection failed.
+
+Run the router endpoint tests from the repository root with the backend
+virtual environment activated:
+
+```sh
+cd backend
+python -m pytest tests/test_router.py -q
+```
+
+These tests use simulated router responses and require no live router.
