@@ -26,7 +26,7 @@ const payments = [
     package: '3-Hour Study',
     amount: 'KES 35',
     paymentStatus: 'Pending',
-    activationStatus: 'Activation Pending',
+    activationStatus: 'Awaiting Payment',
     time: '14:39 EAT',
   },
   {

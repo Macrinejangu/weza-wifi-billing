@@ -8,7 +8,7 @@ export default function App() {
   // This preview is for frontend review only; it does not create an authenticated session.
   const [showDashboardPreview, setShowDashboardPreview] = useState(false)
 
-  if (showDashboardPreview) {
+  if (import.meta.env.DEV && showDashboardPreview) {
     return (
       <DashboardLayout operator={developmentOperator}>
         <DashboardPage operator={developmentOperator} />

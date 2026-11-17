@@ -35,7 +35,7 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator }) {
             aria-current={item.active ? 'page' : undefined}
             onClick={item.active ? onClose : undefined}
             disabled={!item.active}
-            title={item.active ? undefined : "Available in a future release"}
+            title={item.active ? undefined : 'Unavailable in this preview'}
           >
             <span className="material-symbols-outlined">
               {item.icon}
