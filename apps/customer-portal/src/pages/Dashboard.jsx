@@ -1,183 +1,116 @@
+import { ArrowUpRight, ChartNoAxesColumnIncreasing, CreditCard, Package, Wifi } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
-import { NavLink } from 'react-router-dom'
-import {
-  Wifi,
-  Database,
-  CalendarDays,
-  Package,
-  CreditCard,
-  ChartNoAxesColumnIncreasing,
-  ArrowUpRight,
-  CheckCircle2
-} from 'lucide-react'
-
-const weeklyUsage = [
-  { day: 'Mon', amount: 35 },
-  { day: 'Tue', amount: 55 },
-  { day: 'Wed', amount: 45 },
-  { day: 'Thu', amount: 75 },
-  { day: 'Fri', amount: 50 },
-  { day: 'Sat', amount: 90, highlight: true },
-  { day: 'Sun', amount: 30 }
+const quickActions = [
+  { label: 'Browse packages', to: '/packages', icon: Package },
+  { label: 'View payment history', to: '/payments', icon: CreditCard },
+  { label: 'View data usage', to: '/usage', icon: ChartNoAxesColumnIncreasing },
 ]
 
-function UsageChart() {
-  return (
-    <section className="usage-chart">
-      <div className="chart-heading">
-        <div>
-          <h3>Weekly data usage</h3>
-          <p>Your internet consumption this week</p>
-        </div>
-        <NavLink to="/usage">View details <ArrowUpRight size={14} /></NavLink>
-      </div>
+const recentPayments = [
+  { name: 'Weekly Plus', date: '10 Nov 2026', amount: 250, status: 'Paid' },
+  { name: 'Daily Connect', date: '05 Nov 2026', amount: 50, status: 'Paid' },
+  { name: 'Quick Connect', date: '04 Nov 2026', amount: 10, status: 'Failed' },
+]
 
-      <div className="chart-bars">
-        {weeklyUsage.map((item) => (
-          <div className="chart-column" key={item.day}>
-            <div className="bar-area">
-              <div
-                className={`chart-bar ${item.highlight ? 'lime-bar' : ''}`}
-                style={{ height: `${item.amount}%` }}
-              />
-            </div>
-            <span>{item.day}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
+const card = 'min-w-0 rounded-2xl border border-[#edece8] bg-white p-4 sm:p-6'
 
 export default function Dashboard() {
   return (
-    <div className="page-content">
-
-      <div className="dashboard-heading">
-        <p className="hero-eyebrow">CUSTOMER OVERVIEW</p>
+    <div className="page-content space-y-4">
+      <header className="page-heading">
         <h1>Karibu, Enoch.</h1>
-        <p>Here's what's happening with your WEZA connection.</p>
-      </div>
+        <p>Here’s your connection overview. This preview uses sample data.</p>
+      </header>
 
-      <section className="welcome-hero dashboard-hero">
-        <div className="hero-content">
-          <p className="hero-eyebrow">YOUR CONNECTION</p>
-          <h1>Your Internet. Your Way.</h1>
-          <p className="hero-description">
-            Stay connected to the things that matter.
-            Manage your package and track your usage here.
-          </p>
-          <NavLink to="/packages" className="hero-button">
-            Explore packages <ArrowUpRight size={15} />
-          </NavLink>
+      <section className={card} aria-labelledby="connection-overview">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#d9e52e]">
+              <Wifi size={20} aria-hidden="true" />
+            </span>
+            <div>
+              <h2 id="connection-overview" className="text-lg font-bold">Connection</h2>
+              <p className="text-sm text-[#655f75]">Sample status: internet active</p>
+            </div>
+          </div>
+          <Link to="/packages" className="public-button">Browse packages</Link>
         </div>
-        <Wifi className="hero-decoration" size={100} />
+
+        <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-[#f4f3f0] p-3">
+            <dt className="text-sm text-[#655f75]">Active package</dt>
+            <dd className="mt-1 font-bold">Weekly Plus</dd>
+          </div>
+          <div className="rounded-xl bg-[#f4f3f0] p-3">
+            <dt className="text-sm text-[#655f75]">Remaining data</dt>
+            <dd className="mt-1 font-bold">6.4 GB of 10 GB</dd>
+            <progress
+              className="mt-2 block w-full accent-[#726b91]"
+              value={6.4}
+              max={10}
+              aria-label="6.4 GB remaining out of 10 GB"
+            />
+          </div>
+          <div className="rounded-xl bg-[#f4f3f0] p-3">
+            <dt className="text-sm text-[#655f75]">Valid until</dt>
+            <dd className="mt-1 font-bold">18 Nov, 11:42 AM EAT</dd>
+          </div>
+        </dl>
       </section>
 
-      <section className="dashboard-stats">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className={card}>
+          <h2 className="text-lg font-bold">Your data, at a glance</h2>
+          <p className="mt-3 text-sm text-[#655f75]">
+            <strong className="text-2xl text-[#17152d]">3.6 GB</strong> used in the last 7 days
+          </p>
+          <Link to="/usage" className="mt-3 inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#585172]">
+            View usage details <ArrowUpRight size={16} aria-hidden="true" />
+          </Link>
+        </section>
 
-        <article className="stat-card">
-          <div className="dashboard-stat-top">
-            Active package
-            <Package size={19} />
-          </div>
-          <h3>Weekly Plus</h3>
-          <p>10 GB package</p>
-        </article>
-
-        <article className="stat-card">
-          <div className="dashboard-stat-top">
-            Data remaining
-            <Database size={19} />
-          </div>
-          <h3>6.4 GB</h3>
-          <p>Out of 10 GB</p>
-        </article>
-
-        <article className="stat-card">
-          <div className="dashboard-stat-top">
-            Valid until
-            <CalendarDays size={19} />
-          </div>
-          <h3>18 Nov</h3>
-          <p>Package expiry date</p>
-        </article>
-
-      </section>
-
-      <div className="dashboard-content-grid">
-        <UsageChart />
-
-        <section className="dashboard-actions">
-          <h3>Quick actions</h3>
-
-          <NavLink to="/packages" className="dashboard-action">
-            <Package size={19} />
-            <span>
-              <strong>Buy a package</strong>
-              <small>Explore available packages</small>
-            </span>
-            <ArrowUpRight size={15} />
-          </NavLink>
-
-          <NavLink to="/payments" className="dashboard-action">
-            <CreditCard size={19} />
-            <span>
-              <strong>Make a payment</strong>
-              <small>Pay using M-Pesa</small>
-            </span>
-            <ArrowUpRight size={15} />
-          </NavLink>
-
-          <NavLink to="/usage" className="dashboard-action">
-            <ChartNoAxesColumnIncreasing size={19} />
-            <span>
-              <strong>View usage</strong>
-              <small>Check your data consumption</small>
-            </span>
-            <ArrowUpRight size={15} />
-          </NavLink>
+        <section className={card}>
+          <h2 className="text-lg font-bold">Quick actions</h2>
+          <ul className="mt-2 divide-y divide-[#edece8]">
+            {quickActions.map(({ label, to, icon: Icon }) => (
+              <li key={to}>
+                <Link to={to} className="flex min-h-11 items-center gap-3 py-2 text-sm font-semibold">
+                  <Icon size={18} className="shrink-0 text-[#585172]" aria-hidden="true" />
+                  <span className="flex-1">{label}</span>
+                  <ArrowUpRight size={15} className="shrink-0" aria-hidden="true" />
+                </Link>
+              </li>
+            ))}
+          </ul>
         </section>
       </div>
 
-      <section className="dashboard-payments">
-        <div className="section-heading">
-          <div>
-            <h3>Recent payments</h3>
-            <p>Your latest transactions</p>
-          </div>
-          <NavLink to="/payments">View all</NavLink>
+      <section className={card}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-bold">Recent payments</h2>
+          <Link to="/payments" className="inline-flex min-h-11 items-center text-sm font-semibold text-[#585172]">
+            View all payments
+          </Link>
         </div>
 
-        <div className="dashboard-payment-row">
-          <div className="dashboard-payment-icon">
-            <CheckCircle2 size={18} />
-          </div>
-          <div>
-            <strong>Weekly Plus</strong>
-            <p>M-Pesa · 11 Nov 2026</p>
-          </div>
-          <div className="dashboard-payment-amount">
-            <strong>KSh 250</strong>
-            <small>Successful</small>
-          </div>
-        </div>
-
-        <div className="dashboard-payment-row">
-          <div className="dashboard-payment-icon">
-            <CheckCircle2 size={18} />
-          </div>
-          <div>
-            <strong>Daily Package</strong>
-            <p>M-Pesa · 8 Nov 2026</p>
-          </div>
-          <div className="dashboard-payment-amount">
-            <strong>KSh 50</strong>
-            <small>Successful</small>
-          </div>
-        </div>
+        <ul className="divide-y divide-[#edece8]">
+          {recentPayments.map(({ name, date, amount, status }) => (
+            <li key={name} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+              <div>
+                <p className="font-semibold">{name}</p>
+                <p className="text-xs text-[#655f75]">{date} · M-Pesa</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <strong>KES {amount.toLocaleString('en-KE')}</strong>
+                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${status === 'Paid' ? 'bg-lime-100 text-lime-900' : 'bg-red-100 text-red-900'}`}>
+                  {status}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
-
     </div>
   )
 }
