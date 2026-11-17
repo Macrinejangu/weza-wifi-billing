@@ -36,7 +36,10 @@ export default function Welcome() {
       <main className="public-content">
         <section className="public-hero">
           <h1>Your Internet. Your Way.</h1>
-          <p>Pick a Wi-Fi package for the time and data you need.</p>
+          <p>
+            Find a Wi-Fi package for a quick connection or a few days online.
+            Compare prices, data allowances, and durations before choosing.
+          </p>
 
           <div className="public-actions">
             <Link to="/packages" className="public-button">
@@ -52,19 +55,30 @@ export default function Welcome() {
           <article className="welcome-feature-card">
             <Clock3 size={22} aria-hidden="true" />
             <h2>Made for your day</h2>
-            <p>Choose the duration and data allowance you need.</p>
+            <p>
+              Compare plans by price, data, and duration. Pick a short pass for
+              today or a longer plan for regular use.
+            </p>
           </article>
 
           <article className="welcome-feature-card">
             <Smartphone size={22} aria-hidden="true" />
             <h2>Pay in a moment</h2>
-            <p>{demoDataEnabled ? 'Preview M-Pesa checkout.' : 'M-Pesa checkout is currently unavailable.'}</p>
+            <p>
+              Browse packages before signing in.{' '}
+              {demoDataEnabled
+                ? 'Preview M-Pesa checkout to see how payment works.'
+                : 'M-Pesa checkout is currently unavailable.'}
+            </p>
           </article>
 
           <article className="welcome-feature-card">
             <SlidersHorizontal size={22} aria-hidden="true" />
             <h2>You’re in control</h2>
-            <p>Track your package, data usage, and payments.</p>
+            <p>
+              See how much data you have left and when your plan expires.
+              Find past payments in your account.
+            </p>
           </article>
         </section>
       </main>
