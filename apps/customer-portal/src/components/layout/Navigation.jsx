@@ -1,7 +1,7 @@
-
 import { NavLink } from 'react-router-dom'
 
 import {
+  Headset,
   LayoutDashboard,
   Package,
   CreditCard,
@@ -12,7 +12,7 @@ import {
 const navigation = [
   {
     name: 'Overview',
-    path: '/',
+    path: '/dashboard',
     icon: LayoutDashboard
   },
   {
@@ -34,6 +34,11 @@ const navigation = [
     name: 'My Profile',
     path: '/profile',
     icon: UserRound
+  },
+  {
+    name: 'Support',
+    path: '/support',
+    icon: Headset
   }
 ]
 
@@ -47,7 +52,7 @@ export function NavigationLinks({ mobile = false }) {
           <NavLink
             key={item.path}
             to={item.path}
-            end={item.path === '/'}
+            end
             className={({ isActive }) =>
               isActive ? 'navigation-link active' : 'navigation-link'
             }

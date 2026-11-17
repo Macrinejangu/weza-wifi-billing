@@ -1,69 +1,77 @@
-import { NavLink } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
+  ArrowRight,
   Clock3,
-  Smartphone,
   SlidersHorizontal,
-  ArrowUpRight
+  Smartphone,
+  Wifi,
 } from 'lucide-react'
 
 export default function Welcome() {
   return (
-    <div className="welcome-page">
-      <p className="hero-eyebrow">WELCOME TO WEZA</p>
+    <div className="public-welcome">
+      <header className="public-header">
+        <div className="public-header-inner">
+          <Link to="/" className="public-brand">
+            <span className="public-brand-icon">
+              <Wifi size={20} aria-hidden="true" />
+            </span>
+            <span>
+              <strong>Weza Wi-Fi</strong>
+              <small>Public network</small>
+            </span>
+          </Link>
 
-      <h1 className="welcome-page-title">
-        A little Wi-Fi. A lot of possibility.
-      </h1>
-
-      <p className="welcome-page-description">
-        Pick your pace. Every package comes with a simple M-Pesa checkout.
-      </p>
-
-      <section className="welcome-main-hero">
-        <div className="welcome-hero-content">
-          <p className="hero-eyebrow">YOUR EVERYDAY CONNECTION</p>
-          <h2>Your Internet. Your Way.</h2>
-
-          <p>
-            Big ideas. Favourite shows. People who matter.
-            Enjoy flexible WEZA Wi-Fi packages made for the way you live.
-          </p>
-
-          <div className="welcome-hero-actions">
-            <NavLink to="/login" className="welcome-login-button">
-              Login
-            </NavLink>
-
-            <NavLink to="/register" className="welcome-register-button">
-              Create account
-            </NavLink>
-          </div>
+          <nav className="public-nav" aria-label="Public navigation">
+            <Link to="/packages">Packages</Link>
+            <Link to="/login">Sign in</Link>
+            <Link to="/packages" className="public-button">
+              Get connected
+            </Link>
+          </nav>
         </div>
-      </section>
+      </header>
 
-      <section className="welcome-feature-grid">
-        <article className="welcome-feature-card">
-          <Clock3 size={22} />
-          <h3>Made for your day</h3>
-          <p>An hour or a month. Pick the package that fits.</p>
-        </article>
+      <main className="public-content">
+        <section className="public-hero">
+          <h1>Your Internet. Your Way.</h1>
+          <p>Pick a Wi-Fi package for the time and data you need.</p>
 
-        <article className="welcome-feature-card">
-          <Smartphone size={22} />
-          <h3>Pay in a moment</h3>
-          <p>An easy, familiar M-Pesa experience.</p>
-        </article>
+          <div className="public-actions">
+            <Link to="/packages" className="public-button">
+              Choose package <ArrowRight size={17} aria-hidden="true" />
+            </Link>
+            <Link to="/login" className="public-button public-button-secondary">
+              Sign in
+            </Link>
+          </div>
+        </section>
 
-        <article className="welcome-feature-card">
-          <SlidersHorizontal size={22} />
-          <h3>You're in control</h3>
-          <p>Your data, your payments and your connections all in one place.</p>
-        </article>
-      </section>
+        <section className="welcome-feature-grid" aria-label="How Weza works">
+          <article className="welcome-feature-card">
+            <Clock3 size={22} aria-hidden="true" />
+            <h2>Made for your day</h2>
+            <p>Choose the duration and data allowance you need.</p>
+          </article>
 
-      <NavLink to="/Dashboard" className="welcome-dashboard-link">
-        Explore the dashboard <ArrowUpRight size={16} />
-      </NavLink>
+          <article className="welcome-feature-card">
+            <Smartphone size={22} aria-hidden="true" />
+            <h2>Pay in a moment</h2>
+            <p>Use your M-Pesa number at checkout.</p>
+          </article>
+
+          <article className="welcome-feature-card">
+            <SlidersHorizontal size={22} aria-hidden="true" />
+            <h2>You’re in control</h2>
+            <p>Track your package, data usage, and payments.</p>
+          </article>
+        </section>
+      </main>
+
+      <footer className="public-footer">
+        <span>Weza Wi-Fi</span>
+        <Link to="/support">Help &amp; Support</Link>
+      </footer>
     </div>
   )
 }

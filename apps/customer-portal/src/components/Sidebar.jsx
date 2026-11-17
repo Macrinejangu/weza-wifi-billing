@@ -7,7 +7,7 @@ import { NavigationLinks } from './layout/Navigation'
 
 export default function Sidebar() {
   return (
-    <aside className="w-[245px] min-h-screen bg-white px-[22px] pt-[30px] pb-[22px] flex flex-col shrink-0">
+    <aside className="customer-sidebar w-[245px] min-h-screen bg-white px-[22px] pt-[30px] pb-[22px] flex flex-col shrink-0">
 
       {/* Sidebar logo */}
       <div className="flex items-center min-h-[48px] mb-[45px]">
