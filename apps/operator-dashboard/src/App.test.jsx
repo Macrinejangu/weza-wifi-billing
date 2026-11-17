@@ -102,3 +102,16 @@ test('provides an accessible control for opening NOC support', () => {
   expect(html).toContain('Forgot Password or Need Access?')
   expect(html).toContain('type="button"')
 })
+
+test('disables navigation destinations that are not implemented', () => {
+  const html = renderToStaticMarkup(
+    <DashboardLayout operator={developmentOperator}>
+      <DashboardPage operator={developmentOperator} />
+    </DashboardLayout>
+  )
+  const navigation = html.match(/<nav[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? ''
+
+  expect(navigation).toContain('aria-current="page"')
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(7)
+  expect(navigation).not.toContain('href="#"')
+})

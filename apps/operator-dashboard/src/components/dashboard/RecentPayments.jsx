@@ -84,7 +84,7 @@ export default function RecentPayments() {
               <th scope="col">PACKAGE</th>
               <th scope="col">AMOUNT</th>
               <th scope="col">PAYMENT</th>
-              <th scope="col">ACTIVATION</th>
+              <th scope="col">INTERNET ACCESS</th>
               <th scope="col">TIME</th>
             </tr>
           </thead>
@@ -124,9 +124,12 @@ export default function RecentPayments() {
         </table>
       </div>
 
-      <p className="payments-footnote">
-        Illustrative transactions only. No live payment records are connected.
-      </p>
+      <div className="payments-footer">
+        <span>Showing 5 of 814 sample transactions today</span>
+        <p className="payments-footnote">
+          Illustrative transactions only. No live payment records are connected.
+        </p>
+      </div>
     </section>
   )
 }

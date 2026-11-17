@@ -28,12 +28,14 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator }) {
         <p className="navigation-label">WORKSPACE</p>
 
         {navigationItems.map((item) => (
-          <a
+          <button
             key={item.label}
-            href="#"
+            type="button"
             className={`navigation-item ${item.active ? 'active' : ''}`}
             aria-current={item.active ? 'page' : undefined}
-            onClick={onClose}
+            onClick={item.active ? onClose : undefined}
+            disabled={!item.active}
+            title={item.active ? undefined : "Available in a future release"}
           >
             <span className="material-symbols-outlined">
               {item.icon}
@@ -44,7 +46,7 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator }) {
             {item.badge && (
               <span className="navigation-badge">{item.badge}</span>
             )}
-          </a>
+          </button>
         ))}
       </nav>
 

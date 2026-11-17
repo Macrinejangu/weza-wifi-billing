@@ -5,6 +5,7 @@ const issues = [
     description: 'Router did not respond to a Change of Authorization request.',
     priority: 'High',
     time: '10m ago',
+    action: 'Resolve Issue',
     icon: 'router',
   },
   {
@@ -13,6 +14,7 @@ const issues = [
     description: 'Subscriber payment received; activation is still pending.',
     priority: 'Medium',
     time: '24m ago',
+    action: 'Triage',
     icon: 'pending_actions',
   },
   {
@@ -21,6 +23,7 @@ const issues = [
     description: 'Upstream provider response is taking longer than expected.',
     priority: 'Low',
     time: '45m ago',
+    action: 'Check Daraja',
     icon: 'network_check',
   },
 ]
@@ -63,6 +66,10 @@ export default function AttentionList() {
                 <span>{issue.id}</span>
                 <span>{issue.time}</span>
               </div>
+
+              <span className="attention-action-label">
+                {issue.action}
+              </span>
             </div>
           </article>
         ))}

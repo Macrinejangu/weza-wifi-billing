@@ -16,14 +16,18 @@ export default function DashboardPage({ operator }) {
         </div>
 
         <div className="cluster-verification">
-          <span className="material-symbols-outlined">verified</span>
+          <span className="material-symbols-outlined">info</span>
           Cluster KE-NBO-01: Demo environment
         </div>
       </div>
 
       <KpiGrid />
-      <ActivityChart />
-      <AttentionList />
+
+      <div className="dashboard-operations-grid">
+        <ActivityChart />
+        <AttentionList />
+      </div>
+
       <RecentPayments />
     </section>
   )

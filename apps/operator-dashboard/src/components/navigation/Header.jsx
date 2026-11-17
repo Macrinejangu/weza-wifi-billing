@@ -20,7 +20,7 @@ export default function Header({
 
         <div className="connection-status">
           <span className="connection-dot" />
-          <span className="connection-label">Connected</span>
+          <span className="connection-label">Demo Environment</span>
           <span className="connection-divider">/</span>
           <span className="cluster-name">Cluster KE-NBO-01</span>
         </div>

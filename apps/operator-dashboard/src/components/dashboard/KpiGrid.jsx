@@ -2,7 +2,7 @@ const kpiItems = [
   {
     title: 'Revenue Today',
     value: 'KES 142,850',
-    detail: '814 confirmed transactions',
+    detail: '814 sample confirmed transactions',
     icon: 'payments',
     trend: '+12.8%',
     trendLabel: 'vs yesterday',
@@ -11,10 +11,10 @@ const kpiItems = [
   {
     title: 'Active Sessions',
     value: '1,248',
-    detail: 'Hotspot & GPON Fiber online',
+    detail: 'Sample Hotspot & GPON Fiber sessions',
     icon: 'wifi',
-    trend: 'Live',
-    trendLabel: 'connected clients',
+    trend: 'Sample',
+    trendLabel: 'illustrative sessions',
     accent: 'sessions',
   },
   {

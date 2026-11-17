@@ -1,44 +1,70 @@
 import { useState } from 'react'
 
-// Static illustrative figures; replace with API data when the backend is integrated.
+// All chart figures are illustrative demonstration data.
+// Replace these datasets with API responses during backend integration.
 const chartData = {
-  revenue: {
-    label: 'Revenue',
-    values: [104000, 118000, 129000, 136000, 152000, 168000, 142850],
-    peak: 'KES 168,000',
-    average: 'KES 135,693',
+  '7 days': {
+    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    revenue: {
+      values: [104000, 118000, 129000, 136000, 152000, 168000, 142850],
+      peak: 'KES 168,000',
+      average: 'KES 135,693',
+    },
+    sessions: {
+      values: [820, 940, 1080, 1020, 1190, 1410, 1248],
+      peak: '1,410 clients',
+      average: '1,101 clients',
+    },
   },
-  sessions: {
-    label: 'Active Sessions',
-    values: [820, 940, 1080, 1020, 1190, 1410, 1248],
-    peak: '1,410 clients',
-    average: '1,101 clients',
+  today: {
+    labels: ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'],
+    revenue: {
+      values: [8200, 12400, 18700, 23100, 19800, 28400, 32250],
+      peak: 'KES 32,250',
+      average: 'KES 20,407',
+    },
+    sessions: {
+      values: [420, 610, 890, 1040, 980, 1180, 1248],
+      peak: '1,248 clients',
+      average: '910 clients',
+    },
+  },
+  month: {
+    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+    revenue: {
+      values: [684000, 742000, 816000, 789000],
+      peak: 'KES 816,000',
+      average: 'KES 757,750',
+    },
+    sessions: {
+      values: [980, 1120, 1360, 1248],
+      peak: '1,360 clients',
+      average: '1,177 clients',
+    },
   },
 }
 
-const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const ranges = [
+  { value: '7 days', label: 'Last 7 Days' },
+  { value: 'today', label: 'Today' },
+  { value: 'month', label: 'This Month' },
+]
 
-// Convert metric values into coordinates for the SVG line chart.
-function createPoints(values) {
-  const min = Math.min(...values) * 0.85
-  const max = Math.max(...values) * 1.05
-  const range = max - min || 1
+function formatValue(value, metric) {
+  if (metric === 'revenue') {
+    return `KES ${value.toLocaleString('en-KE')}`
+  }
 
-  return values.map((value, index) => {
-    const x = 40 + (index * 620) / (values.length - 1)
-    const y = 170 - ((value - min) / range) * 135
-    return `${x},${y}`
-  })
+  return `${value.toLocaleString('en-KE')} clients`
 }
 
 export default function ActivityChart() {
-  // Switch between the two illustrative metrics displayed by the chart.
   const [metric, setMetric] = useState('revenue')
+  const [range, setRange] = useState('7 days')
 
-  const data = chartData[metric]
-  const points = createPoints(data.values)
-  const pointString = points.join(' ')
-  const areaString = `40,180 ${pointString} 660,180`
+  const selectedData = chartData[range]
+  const data = selectedData[metric]
+  const maxValue = Math.max(...data.values)
 
   return (
     <section className="activity-section">
@@ -47,7 +73,7 @@ export default function ActivityChart() {
           <p className="section-eyebrow">PERFORMANCE</p>
           <h2>Revenue & Session Activity</h2>
           <p className="section-description">
-            Monitor billing performance and network usage
+            Demonstration of billing performance and network usage
           </p>
         </div>
 
@@ -55,7 +81,7 @@ export default function ActivityChart() {
       </div>
 
       <div className="activity-toolbar">
-        <div className="metric-toggle" aria-label="Chart metric">
+        <div className="metric-toggle" role="group" aria-label="Chart metric">
           <button
             type="button"
             className={metric === 'revenue' ? 'selected' : ''}
@@ -76,84 +102,77 @@ export default function ActivityChart() {
         </div>
 
         <label className="date-range-control">
-          <span className="material-symbols-outlined">calendar_month</span>
+          <span className="material-symbols-outlined" aria-hidden="true">
+            calendar_month
+          </span>
           <select
-            value="7 days"
+            value={range}
             aria-label="Chart date range"
-            disabled
+            onChange={(event) => setRange(event.target.value)}
           >
-            <option value="7 days">Last 7 Days</option>
+            {ranges.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
-
       </div>
 
       <div className="chart-summary">
         <div>
-          <p>{metric === 'revenue' ? 'Weekly revenue peak' : 'Peak concurrency'}</p>
+          <p>{metric === 'revenue' ? 'Period peak revenue' : 'Peak concurrency'}</p>
           <strong>{data.peak}</strong>
         </div>
         <div>
-          <p>{metric === 'revenue' ? 'Daily average' : 'Average sessions'}</p>
+          <p>
+            {metric === 'revenue'
+              ? range === 'today'
+                ? 'Average per interval'
+                : range === 'month'
+                  ? 'Weekly average'
+                  : 'Daily average'
+              : 'Average sessions'}
+          </p>
           <strong>{data.average}</strong>
         </div>
       </div>
 
-      <div className="activity-chart" role="img" aria-label={`${data.label} demonstration chart for the last seven days`}>
-        <div className="chart-y-labels" aria-hidden="true">
-          <span>High</span>
-          <span>Mid</span>
-          <span>Low</span>
-        </div>
+      <div
+        className="activity-chart activity-bar-chart"
+        role="img"
+        aria-label={`${metric === 'revenue' ? 'Revenue' : 'Active sessions'} demonstration bar chart for ${ranges.find((item) => item.value === range).label}`}
+      >
+        {data.values.map((value, index) => {
+          const height = Math.max((value / maxValue) * 100, 4)
 
-        <svg viewBox="0 0 700 200" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="activity-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#746d97" stopOpacity="0.24" />
-              <stop offset="100%" stopColor="#746d97" stopOpacity="0.02" />
-            </linearGradient>
-          </defs>
+          return (
+            <div className="chart-bar-column" key={selectedData.labels[index]}>
+              <span className="chart-bar-value">
+                {metric === 'revenue'
+                  ? `${Math.round(value / 1000)}k`
+                  : value.toLocaleString('en-KE')}
+              </span>
 
-          {[35, 102, 170].map((y) => (
-            <line
-              key={y}
-              x1="40"
-              y1={y}
-              x2="660"
-              y2={y}
-              className="chart-grid-line"
-            />
-          ))}
+              <div className="chart-bar-track">
+                <div
+                  className={`chart-bar ${value === maxValue ? 'chart-bar-peak' : ''}`}
+                  style={{ height: `${height}%` }}
+                  title={`${selectedData.labels[index]}: ${formatValue(value, metric)}`}
+                />
+              </div>
 
-          <polygon points={areaString} fill="url(#activity-fill)" />
-          <polyline
-            points={pointString}
-            className="chart-line"
-            fill="none"
-          />
-
-          {points.map((point, index) => {
-            const [x, y] = point.split(',')
-            return (
-              <circle
-                key={days[index]}
-                cx={x}
-                cy={y}
-                r="5"
-                className="chart-point"
-              />
-            )
-          })}
-        </svg>
-      </div>
-
-      <div className="chart-x-labels" aria-hidden="true">
-        {days.map((day) => <span key={day}>{day}</span>)}
+              <span className="chart-bar-label">
+                {selectedData.labels[index]}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
       <p className="chart-footnote">
-        Illustrative figures only. The selected date range does not yet load
-        historical data from a backend.
+        Illustrative figures only. Date-range changes display sample datasets;
+        no live or historical backend data is connected.
       </p>
     </section>
   )
