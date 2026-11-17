@@ -103,9 +103,9 @@ For API-SSL, set `ROUTER_USE_SSL=true` and `ROUTER_PORT=8729`.
 
 Keep real credentials in your local `.env`.
 
-The current connection uses the plain RouterOS API. Confirm the lab's
-network protection with the router owner. Deployment requires an agreed
-secure connection setup.
+The default lab configuration uses the plain RouterOS API.
+Certificate-verified API-SSL is supported. A live certificate-verified
+connection still needs testing before deployment.
 
 With the backend running, open its `/docs` page, expand
 `GET /router/status`, select “Try it out”, and enter your `WEZA_API_KEY`
@@ -115,7 +115,7 @@ Expected responses:
 
 - `200`: the router identity request succeeded.
 - `401`: the supplied API key is missing or incorrect.
-- `- `502`: the router returned a missing, invalid, or unexpected identity.
+- `502`: the router returned a missing, invalid, or unexpected identity.
 - `503`: API authentication or router identity verification is unconfigured,
   or the router connection failed.
 
