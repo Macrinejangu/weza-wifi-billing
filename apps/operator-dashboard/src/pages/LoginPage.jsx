@@ -70,18 +70,6 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
   return (
     <main className="login-page">
       <section className="login-panel" aria-labelledby="login-title">
-        <div className="login-cluster">
-          <div className="cluster-details">
-            <span className="cluster-label">CLUSTER KE-NBO-01</span>
-            <span className="cluster-location">Nairobi East</span>
-          </div>
-
-          <span className="cluster-status">
-            <span className="status-indicator" />
-            Online
-          </span>
-        </div>
-
         <div className="login-brand" aria-label="Weza">
           <div className="brand-emblem" aria-hidden="true">
             <svg viewBox="0 0 64 64" role="presentation">
@@ -96,7 +84,7 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
 
         <header className="login-heading">
           <h1 id="login-title">Staff Login</h1>
-          <p>Weza Wi-Fi Operator Console &amp; Billing NOC</p>
+          <p>Sign in to your Weza operator account.</p>
         </header>
 
         <form className="login-form" onSubmit={handleSubmit}>
@@ -112,12 +100,6 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
               onChange={(event) => setStaffId(event.target.value)}
               required
             />
-            <span className="field-assurance">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                verified_user
-              </span>
-              NOC Verified
-            </span>
           </div>
 
           <div className="login-field">
@@ -145,22 +127,13 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
                 </span>
               </button>
             </div>
-            <span className="field-assurance">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                security
-              </span>
-              2FA Ready
-            </span>
           </div>
 
           <div className="login-restriction">
             <span className="material-symbols-outlined" aria-hidden="true">
               admin_panel_settings
             </span>
-            <p>
-              Restricted access. This console is for authorized Weza network
-              engineers, field technicians, and billing NOC dispatchers only.
-            </p>
+            <p>For authorized Weza staff only.</p>
           </div>
 
           <button className="login-submit" type="submit">
@@ -189,22 +162,18 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
           </span>
         </button>
 
-        <button
-          className="dashboard-preview-link"
-          type="button"
-          onClick={onPreviewDashboard}
-        >
-          Preview Dashboard (Development Only)
-        </button>
+        {import.meta.env.DEV && (
+          <button
+            className="dashboard-preview-link"
+            type="button"
+            onClick={onPreviewDashboard}
+          >
+            Preview Dashboard (Development Only)
+          </button>
+        )}
 
-        <footer className="login-footer">
-          <p>
-            <span className="material-symbols-outlined" aria-hidden="true">
-              enhanced_encryption
-            </span>
-            Protected by Hardware Security Key &amp; 2FA
-          </p>
-          <p>Kenya Data Protection Act 2019 Compliant · Version 4.18.2</p>
+          <footer className="login-footer">
+          <p>Staff login preview</p>
         </footer>
       </section>
 
@@ -240,10 +209,9 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
               support_agent
             </span>
             <p className="support-eyebrow">ACCESS &amp; ACCOUNT SUPPORT</p>
-            <h2 id="support-title">NOC Lead Desk</h2>
+            <h2 id="support-title">Staff Access Support</h2>
             <p id="support-description" className="support-description">
-              Staff credentials and physical YubiKeys are provisioned by your
-              Regional NOC Operations Lead.
+              Account support details will appear here once confirmed by Weza.
             </p>
 
             <div className="support-detail">

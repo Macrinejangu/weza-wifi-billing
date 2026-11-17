@@ -11,7 +11,7 @@ const kpiItems = [
   {
     title: 'Active Sessions',
     value: '1,248',
-    detail: 'Sample Hotspot & GPON Fiber sessions',
+    detail: 'Sample hotspot sessions',
     icon: 'wifi',
     trend: 'Sample',
     trendLabel: 'illustrative sessions',

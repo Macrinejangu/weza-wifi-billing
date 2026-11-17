@@ -31,24 +31,25 @@ export default function Header({
           <span className="material-symbols-outlined">search</span>
           <input
             type="search"
-            placeholder="Search vouchers, IP, node..."
-            aria-label="Search vouchers, IP addresses or nodes"
+            placeholder="Search unavailable in preview"
+            aria-label="Search unavailable in preview"
+            disabled
           />
           <span className="search-shortcut">⌘ K</span>
         </label>
 
         <button
           className="icon-button notification-button"
-          aria-label="Notifications"
+          aria-label="Notifications unavailable in preview"
+          title="Notifications unavailable in preview"
+          disabled
         >
           <span className="material-symbols-outlined">notifications</span>
-          <span className="notification-dot" />
         </button>
 
         <div className="header-user">
           <div className="operator-avatar">{operator.initials}</div>
           <span>{operator.displayName}</span>
-          <span className="material-symbols-outlined">expand_more</span>
         </div>
       </div>
     </header>
