@@ -46,8 +46,8 @@ export default function Payments() {
   return (
     <div className="page-content">
       <div className="page-heading">
-        <p className="hero-eyebrow">PAYMENT CENTRE</p>
-        <h1>Payments</h1>
+        <p className="hero-eyebrow">PAYMENTS.INSTANT HOTSPOT ACCESS</p>
+        <h1>More connection is a tap away</h1>
         <p>Manage your payments and keep your connection active.</p>
       </div>
 

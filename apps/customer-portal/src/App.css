@@ -1,4 +1,7 @@
+
+
 @import "tailwindcss";
+
 /* ================================
    WEZA THEME
 ================================ */
@@ -13,7 +16,6 @@
   --weza-muted: #88849A;
 }
 
-
 *,
 *::before,
 *::after {
@@ -26,7 +28,9 @@ body {
   color: var(--weza-text);
 }
 
-button, select, input {
+button,
+select,
+input {
   font: inherit;
 }
 
@@ -35,7 +39,7 @@ a {
 }
 
 /* ================================
-   LAYOUT AND NAVIGATION
+   LAYOUT
 ================================ */
 
 .customer-layout {
@@ -43,28 +47,25 @@ a {
   min-height: 100vh;
 }
 
-.sidebar {
-  width: 245px;
-  min-height: 100vh;
-  padding: 30px 22px 22px;
-  background: var(--weza-white);
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
+.main-content {
+  flex: 1;
+  min-width: 0;
 }
 
-.weza-logo, .sidebar-logo {
-  display: flex;
-  align-items: center;
-  min-height: 42px;
+.page-container {
+  max-width: 1250px;
+  padding: 15px 42px 45px;
+  margin: 0 auto;
 }
 
-.weza-logo img, .sidebar-logo img {
-  width: 125px;
-  max-height: 48px;
-  object-fit: contain;
-  object-position: left;
+.mobile-header,
+.mobile-navigation-wrapper {
+  display: none;
 }
+
+/* ================================
+   NAVIGATION LINKS
+================================ */
 
 .sidebar-label {
   color: var(--weza-muted);
@@ -107,116 +108,6 @@ a {
 
 .navigation-link.active svg {
   color: var(--weza-text);
-}
-
-.support-card {
-  margin-top: auto;
-  margin-bottom: 24px;
-  padding: 18px;
-  border-radius: 14px;
-  background: var(--weza-light-lavender);
-}
-
-.support-icon {
-  color: var(--weza-lavender);
-  margin-bottom: 12px;
-}
-
-.support-card h3 {
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
-.support-card p {
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--weza-muted);
-}
-
-.support-button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: none;
-  background: var(--weza-lime);
-  color: var(--weza-text);
-  border-radius: 7px;
-  padding: 10px 12px;
-  margin-top: 14px;
-  font-size: 11px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.sidebar-customer {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  border-top: 1px solid #eeeef1;
-  padding-top: 18px;
-}
-
-.customer-avatar {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--weza-light-lavender);
-  color: var(--weza-lavender);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.sidebar-customer h4 {
-  font-size: 12px;
-}
-
-.sidebar-customer p {
-  color: var(--weza-muted);
-  font-size: 10px;
-  margin-top: 4px;
-}
-
-.main-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.topbar {
-  height: 78px;
-  padding: 0 42px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 14px;
-  background: var(--weza-white);
-  border-radius: 30px;
-  font-size: 11px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  background: #77B88B;
-  border-radius: 50%;
-}
-
-.page-container {
-  max-width: 1250px;
-  padding: 15px 42px 45px;
-  margin: 0 auto;
-}
-
-.mobile-header,
-.mobile-navigation-wrapper {
-  display: none;
 }
 
 /* ================================
@@ -929,8 +820,9 @@ a {
   color: #77B88B;
 }
 
-
-/* PROFILE PAGE */
+/* ================================
+   PROFILE PAGE
+================================ */
 
 .profile-page {
   max-width: 850px;
@@ -999,7 +891,61 @@ a {
   text-align: right;
 }
 
+/* ================================
+   RESPONSIVE
+================================ */
+
+@media (max-width: 900px) {
+  .page-container {
+    padding: 15px 24px 35px;
+  }
+
+  .dashboard-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 600px) {
+  .page-container {
+    padding: 15px 16px 30px;
+  }
+
+  .welcome-feature-grid,
+  .dashboard-stats,
+  .packages-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-main-hero {
+    padding: 25px;
+  }
+
+  .welcome-hero-actions {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-hero {
+    padding: 22px;
+  }
+
+  .chart-bars {
+    gap: 7px;
+  }
+
+  .usage-chart {
+    padding: 18px;
+  }
+
+  .payment-card,
+  .payment-info-card,
+  .recent-payments {
+    padding: 18px;
+  }
+
   .profile-page .profile-card {
     padding: 22px 17px;
   }

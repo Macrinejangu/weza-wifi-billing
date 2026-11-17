@@ -1,8 +1,9 @@
 
 import { Routes, Route, Navigate } from 'react-router-dom'
-import CustomerLayout from './components/CustomerLayout'
+import CustomerLayout from './components/layout/CustomerLayout'
 
 import Login from './pages/Login'
+import Register from './pages/Register'
 import Welcome from './pages/Welcome'
 import Packages from './pages/Packages'
 import ConfirmPackage from './pages/ConfirmPackage'
@@ -15,6 +16,7 @@ export default function App() {
   return (
     <Routes>
   <Route path="/login" element={<Login />} />
+  <Route path="/register" element={<Register />} />
   <Route path="/support" element={<Support />} />
 
   <Route element={<CustomerLayout />}>
