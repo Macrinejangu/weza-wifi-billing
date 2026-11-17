@@ -94,6 +94,13 @@ Add the following settings to your existing local `.env`. Refer to
 - `ROUTER_PORT`: defaults to `8728`.
 - `ROUTER_TIMEOUT`: connection timeout in seconds, defaults to `5`.
 
+- `EXPECTED_ROUTER_IDENTITY`: the router name expected in the response.
+- `ROUTER_USE_SSL`: `false` for the isolated lab, `true` for API-SSL.
+- `ROUTER_TLS_CA_FILE`: path to a trusted CA certificate file, when needed.
+- `ROUTER_TLS_SERVER_NAME`: certificate hostname, defaults to `ROUTER_HOST`.
+
+For API-SSL, set `ROUTER_USE_SSL=true` and `ROUTER_PORT=8729`.
+
 Keep real credentials in your local `.env`.
 
 The current connection uses the plain RouterOS API. Confirm the lab's
@@ -108,7 +115,9 @@ Expected responses:
 
 - `200`: the router identity request succeeded.
 - `401`: the supplied API key is missing or incorrect.
-- `503`: the server API key is unconfigured, or the router connection failed.
+- `- `502`: the router returned a missing, invalid, or unexpected identity.
+- `503`: API authentication or router identity verification is unconfigured,
+  or the router connection failed.
 
 Run the router endpoint tests from the repository root with the backend
 virtual environment activated:
@@ -119,3 +128,6 @@ python -m pytest tests/test_router.py -q
 ```
 
 These tests use simulated router responses and require no live router.
+
+See the [router connectivity guide](docs/router-connectivity.md) for
+security settings and recorded lab test results.

@@ -1,3 +1,6 @@
+
+import ssl
+
 from librouteros import connect
 
 from app.config import router_settings
@@ -6,13 +9,28 @@ from app.config import router_settings
 def connect_router():
     settings = router_settings()
 
-    return connect(
-        host=settings["host"],
-        username=settings["username"],
-        password=settings["password"],
-        port=settings["port"],
-        timeout=settings["timeout"],
-    )
+    connection_options = {
+        "host": settings["host"],
+        "username": settings["username"],
+        "password": settings["password"],
+        "port": settings["port"],
+        "timeout": settings["timeout"],
+    }
+
+    if settings["use_ssl"]:
+        context = ssl.create_default_context(
+            cafile=settings["tls_ca_file"]
+        )
+
+        def verified_tls_wrapper(sock):
+            return context.wrap_socket(
+                sock,
+                server_hostname=settings["tls_server_name"],
+            )
+
+        connection_options["ssl_wrapper"] = verified_tls_wrapper
+
+    return connect(**connection_options)
 
 
 def get_router_identity() -> dict:
