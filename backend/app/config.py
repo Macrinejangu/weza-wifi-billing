@@ -1,9 +1,9 @@
 import os
-from pathlib import Path
 from dataclasses import dataclass, field
+from pathlib import Path
+
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL, make_url
-
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
@@ -27,15 +27,15 @@ class DarajaSettings:
     The credentials use repr=False so they are never printed in logs or tracebacks.
     """
 
-    environment:str
-    consumer_key: str=field(repr=False)
-    consumer_secret: str=field(repr=False)
-    shortcode:str
-    passkey: str=field(repr=False)
-    callback_url:str
+    environment: str
+    consumer_key: str = field(repr=False)
+    consumer_secret: str = field(repr=False)
+    shortcode: str
+    passkey: str = field(repr=False)
+    callback_url: str
 
 
-def daraja_settings()->DarajaSettings:
+def daraja_settings() -> DarajaSettings:
     """Load and validate the Daraja settings from the repository root .env or shell.
 
     Raises RuntimeError if a value is missing, if DARAJA_ENV is anything other
@@ -45,13 +45,12 @@ def daraja_settings()->DarajaSettings:
     """
     load_dotenv(ROOT_ENV)
 
-    environment=os.getenv("DARAJA_ENV", "sandbox")
+    environment = os.getenv("DARAJA_ENV", "sandbox")
     if environment != "sandbox":
         raise RuntimeError("DARAJA_ENV must be 'sandbox'. Production is not supported.")
 
-
     # Collect every missing name first so the developer fixes them in one go.
-    names=[
+    names = [
         "DARAJA_CONSUMER_KEY",
         "DARAJA_CONSUMER_SECRET",
         "DARAJA_SHORTCODE",
@@ -59,12 +58,12 @@ def daraja_settings()->DarajaSettings:
         "DARAJA_CALLBACK_URL",
     ]
 
-    values={name: os.getenv(name) for name in names}
-    missing=[name for name, value in values.items() if not value]
+    values = {name: os.getenv(name) for name in names}
+    missing = [name for name, value in values.items() if not value]
     if missing:
         raise RuntimeError(f"Set {', '.join(missing)} in the repository root .env or shell.")
 
-    # Daraja only delivers callbacks to HTTPS addresses.
+    # We require HTTPS because callbacks carry payment data.
     if not values["DARAJA_CALLBACK_URL"].startswith("https://"):
         raise RuntimeError("DARAJA_CALLBACK_URL must start with https://")
 
