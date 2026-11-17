@@ -4,7 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL, make_url
 
-ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
+ROOT_ENV = Path(__file__).resolve().parents[3] / ".env"
 
 
 def database_url(variable: str = "DATABASE_URL") -> URL:
@@ -16,3 +16,7 @@ def database_url(variable: str = "DATABASE_URL") -> URL:
     if url.drivername != "postgresql+psycopg":
         raise RuntimeError(f"{variable} must use the postgresql+psycopg driver.")
     return url
+
+def mock_payments_enabled() -> bool:
+    load_dotenv(ROOT_ENV)
+    return os.getenv("ENABLE_MOCK_PAYMENTS", "false").lower() == "true"

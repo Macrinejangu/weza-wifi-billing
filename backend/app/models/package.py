@@ -1,14 +1,21 @@
-from sqlalchemy import Column, Integer, String, Boolean, Numeric
-from app.db.base import Base
+from sqlalchemy import Boolean, CheckConstraint, Column, Integer, String
+from app.db.base import Base, TimestampMixin
 
-class Package(Base):
+
+class Package(TimestampMixin, Base):
     __tablename__ = "packages"
+    __table_args__ = (
+        CheckConstraint("price > 0", name="ck_packages_price"),
+        CheckConstraint("duration_minutes > 0", name="ck_packages_duration"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     service_type = Column(String, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
+    price = Column(Integer, nullable=False)  # whole Kenyan shillings
     duration_minutes = Column(Integer, nullable=False)
-    description = Column(String, nullable=True)
-    is_active = Column(Boolean, default=True)
+    download_speed_mbps = Column(Integer, nullable=False)
+    upload_speed_mbps = Column(Integer, nullable=False)
+    description = Column(String)
+    is_active = Column(Boolean, default=True, nullable=False)
     
