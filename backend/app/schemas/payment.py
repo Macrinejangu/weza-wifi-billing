@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field, field_validator
 # Accepts 07XXXXXXXX, 01XXXXXXXX, 2547XXXXXXXX, 2541XXXXXXXX and +254... forms.
 # The captured group is the 9 digits after the country code or leading zero.
 # We check the shape only; Daraja itself rejects numbers that are not on M-Pesa.
-_KENYAN_MOBILE = re.compile(r"(?:\+?254|0)([17]\d{8})")
+# [0-9] rather than \d: in Python, \d also matches digits from other scripts,
+# which would let non-ASCII numbers through into the normalised value.
+_KENYAN_MOBILE = re.compile(r"(?:\+?254|0)([17][0-9]{8})")
 
 
 class PaymentRequest(BaseModel):

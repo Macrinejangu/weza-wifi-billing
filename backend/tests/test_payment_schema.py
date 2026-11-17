@@ -41,6 +41,7 @@ def test_01_prefixed_numbers_are_accepted():
       "07123456789",       # one digit too many
       "0712345678abc",     # trailing characters must not slip through
       "",                  # empty
+      "07\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668",  # non-ASCII digits
    ],
 )
 
