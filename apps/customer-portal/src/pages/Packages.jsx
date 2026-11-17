@@ -1,97 +1,101 @@
-
-
-
-import { Wifi, ArrowRight } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { ArrowRight, Wifi } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 const packages = [
   {
-    name: 'Daily',
+    name: 'Quick Connect',
+    price: 10,
+    duration: '1 hour',
+    data: '500 MB',
+    description: 'For quick messaging and browsing.',
+  },
+  {
+    name: 'Daily Connect',
     price: 50,
     duration: '24 hours',
-    data: '5 GB',
-    description: 'For everyday browsing'
+    data: '2 GB',
+    speed: 'Up to 15 Mbps',
+    description: 'Stream, study, and stay connected.',
   },
   {
-    name: 'Weekly',
+    name: 'Weekly Plus',
     price: 250,
     duration: '7 days',
-    data: '20 GB',
-    description: 'Stay connected all week'
+    data: '10 GB',
+    speed: 'Up to 20 Mbps',
+    description: 'For work and streaming throughout the week.',
+    popular: true,
   },
   {
-    name: 'Monthly',
-    price: 800,
+    name: 'Monthly Max',
+    price: 900,
     duration: '30 days',
-    data: '80 GB',
-    description: 'For regular internet users',
-    popular: true
+    data: '40 GB',
+    speed: 'Up to 25 Mbps',
+    description: 'More data for sharing across devices.',
   },
-  {
-    name: 'Unlimited',
-    price: 1500,
-    duration: '30 days',
-    data: 'Unlimited',
-    description: 'Enjoy uninterrupted browsing'
-  }
 ]
 
 export default function Packages() {
-  const navigate = useNavigate()
-
-  function choosePackage(item) {
-    navigate('/confirm-package', {
-      state: { selectedPackage: item }
-    })
-  }
-
   return (
     <div className="page-content">
-      <div className="page-heading">
-        <p className="hero-eyebrow">INTERNET PACKAGES</p>
-        <h1>Find your perfect connection.</h1>
-        <p>Choose an internet package that works for you.</p>
-      </div>
+      <header className="page-heading">
+        <p className="hero-eyebrow">Internet packages</p>
+        <h1>A little Wi-Fi. A lot of possibility.</h1>
+        <p>Compare packages by price, data, speed, and duration.</p>
+      </header>
 
-      <div className="packages-grid">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {packages.map((item) => (
-          <div className="package-card" key={item.name}>
-            {item.popular && (
-              <span className="package-badge">POPULAR</span>
-            )}
-
-            <div className="package-icon">
-              <Wifi size={22} />
+          <article
+            className={`flex min-w-0 flex-col rounded-2xl border border-[#edece8] bg-white p-5 ${item.popular ? 'border-t-4 border-t-[#726b91]' : ''}`}
+            key={item.name}
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <span className="text-xs font-semibold">
+                {item.popular ? 'Popular choice' : 'Weza Wi-Fi'}
+              </span>
+              <Wifi size={20} className="text-[#726b91]" aria-hidden="true" />
             </div>
 
-            <h2>{item.name}</h2>
-            <p>{item.description}</p>
+            <h2 className="text-lg font-bold">{item.name}</h2>
+            <p className="mb-4 mt-1 flex items-baseline gap-1">
+              <span className="text-sm font-semibold">KES</span>
+              <strong className="text-3xl">{item.price.toLocaleString('en-KE')}</strong>
+            </p>
 
-            <div className="package-price">
-              <h3>KSh {item.price.toLocaleString()}</h3>
-              <span>/ {item.duration}</span>
-            </div>
+            <dl className="grid gap-2 rounded-lg bg-[#f4f3f0] p-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-x-4">
+                <dt>Data</dt>
+                <dd className="font-semibold">{item.data}</dd>
+              </div>
+              <div className="flex flex-wrap justify-between gap-x-4">
+                <dt>Duration</dt>
+                <dd className="font-semibold">{item.duration}</dd>
+              </div>
+              <div className="flex flex-wrap justify-between gap-x-4">
+                <dt>Speed</dt>
+                <dd className="font-semibold">{item.speed ?? 'To be confirmed'}</dd>
+              </div>
+            </dl>
 
-            <div className="package-detail">
-              <span>Data allowance</span>
-              <strong>{item.data}</strong>
-            </div>
+            <p className="mb-4 mt-3 flex-1 text-sm text-[#655f75]">{item.description}</p>
 
-            <div className="package-detail">
-              <span>Validity</span>
-              <strong>{item.duration}</strong>
-            </div>
-
-            <button
-              className="package-button"
-              onClick={() => choosePackage(item)}
+            <Link
+              to="/confirm-package"
+              state={{ selectedPackage: item }}
+              className="package-button text-center"
             >
-              Choose package
-              <ArrowRight size={17} />
-            </button>
-          </div>
+              Choose {item.name}
+              <ArrowRight size={17} className="shrink-0" aria-hidden="true" />
+            </Link>
+          </article>
         ))}
       </div>
+
+      <p className="mt-5 text-sm text-[#655f75]">
+        Sample packages. Prices and specifications are pending confirmation.
+      </p>
     </div>
   )
 }
