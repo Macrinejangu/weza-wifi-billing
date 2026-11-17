@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 # Kenya is UTC+3 all year, with no daylight saving. 
 # A fixed offset avoids depending on the operating system's timezone database, which minimal containers may not include. 
 # That Daraja expects Nairobi time is supported by the simulator's behaviour but still to be confirmed by sandbox testing.
-EAT =timezone(timedelta(hours=3), "EAT")
+EAT = timezone(timedelta(hours=3), "EAT")
 
 _TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"  # YYYYMMDDHHmmss, as Daraja requires
 
