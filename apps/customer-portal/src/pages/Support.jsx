@@ -1,179 +1,111 @@
+import { ArrowLeft, ChevronDown, CircleHelp, CreditCard, PackageX, Smartphone, UserRound, Wifi } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Wifi, UserCircle, CreditCard, Smartphone,
-  PackageX, UserRound, ChevronDown,
-  Headset, CircleHelp, ArrowLeft, Info
-} from 'lucide-react'
 
 const faqs = [
   {
     question: 'Payment received but no internet?',
     icon: CreditCard,
-    answer: 'Your payment may have been received while your connection is being activated. Wait a little, then check your connection status. Contact support if the problem continues.'
+    steps: [
+      'Check for the official M-Pesa confirmation message.',
+      'Reconnect to the Weza Wi-Fi network and check your connection status.',
+      'If you already paid, keep your receipt reference and avoid paying again.',
+    ],
   },
   {
-    question: "Didn't receive M-Pesa STK prompt?",
+    question: 'Didn’t receive the M-Pesa prompt?',
     icon: Smartphone,
-    answer: 'Check your phone number, network connection and M-Pesa availability. You can then retry your payment.'
+    steps: [
+      'Check the phone number you entered at checkout.',
+      'Check for an open M-Pesa prompt on the phone.',
+      'Check the status of the first payment before trying again.',
+    ],
   },
   {
     question: 'Package expired?',
     icon: PackageX,
-    answer: 'Your package may have reached its expiry date. Visit the Packages page to choose and purchase another package.'
+    steps: [
+      'Check the package balance or expiry shown in the portal.',
+      'Return to Packages to choose another plan.',
+    ],
   },
   {
     question: 'Account access problems?',
     icon: UserRound,
-    answer: 'Check your login details. If you still cannot access your account, contact the support team for assistance.'
-  }
+    steps: [
+      'Check the email address and password you entered.',
+      'If you lose access while on the hotspot, reconnect to Weza Wi-Fi and reopen the portal.',
+    ],
+  },
 ]
 
 export default function Support() {
   const [active, setActive] = useState(null)
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] text-[#17152D]">
-
-      {/* Navigation */}
-      <nav className="border-b border-[#EEEAF3] bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4">
-
-          <div className="flex items-center gap-5">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="rounded-lg bg-[#77709D] p-2 text-white">
-                <Wifi size={19} />
-              </div>
-              <div>
-                <p className="text-sm font-bold">Weza Wi-Fi</p>
-                <p className="text-[9px] tracking-wider">CUSTOMER PORTAL</p>
-              </div>
-            </Link>
-
-            <div className="hidden items-center gap-2 rounded-full bg-[#F7F6F2] px-3 py-2 text-xs sm:flex">
-              <span className="h-2 w-2 rounded-full bg-[#D9E52E]" />
-              Connected to Weza Wi-Fi
-            </div>
-          </div>
-
-          <div className="flex items-center gap-5 text-xs">
-            <Link to="/" className="hover:text-[#77709D]">Home</Link>
-            <span className="rounded-full bg-[#D9E52E] px-4 py-2 font-semibold">
-              Support
-            </span>
-            <UserCircle size={22} className="text-[#77709D]" />
-          </div>
-
-        </div>
-      </nav>
-
-      {/* Main content */}
-      <main className="mx-auto max-w-2xl px-5 py-8">
-
-        <div className="flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 rounded-full bg-[#EEECE8] px-4 py-2 text-xs">
-            <ArrowLeft size={14} />
-            Back to Portal Home
+    <>
+      <header className="public-header">
+        <div className="public-header-inner">
+          <Link to="/" className="public-brand">
+            <span className="public-brand-icon"><Wifi size={20} aria-hidden="true" /></span>
+            <strong>Weza Wi-Fi</strong>
           </Link>
-
-          <span className="flex items-center gap-2 rounded-full bg-white px-3 py-2 text-[10px] text-[#77709D]">
-            <Info size={12} />
-            Free Support Portal
-          </span>
+          <span aria-current="page" className="public-button">Support</span>
         </div>
+      </header>
 
-        {/* Heading */}
-        <header className="my-8 text-center">
-          <span className="inline-block rounded-full bg-[#E9E3FF] px-3 py-1 text-[10px] font-semibold text-[#77709D]">
-            ASSISTANCE CENTER
-          </span>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight">
-            Help &amp; Support
-          </h1>
-          <p className="mt-2 text-xs text-[#88849A]">
-            Find quick answers to common connection and payment questions.
+      <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+        <header className="mb-8 text-center">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Help &amp; Support</h1>
+          <p className="mt-2 text-sm leading-6 text-[#655f75] sm:text-base">
+            Find answers to common connection and payment questions.
           </p>
         </header>
 
-        {/* FAQs */}
-        <div className="mb-3 flex justify-between text-[10px]">
-          <span className="font-semibold tracking-wider text-[#77709D]">
-            FREQUENTLY ASKED QUESTIONS
-          </span>
-          <span className="text-[#88849A]">4 topics</span>
-        </div>
+        <section aria-labelledby="support-faqs">
+          <h2 id="support-faqs" className="mb-3 text-sm font-semibold">Frequently asked questions</h2>
+          <div className="space-y-3">
+            {faqs.map(({ question, icon: Icon, steps }, index) => {
+              const isOpen = active === index
 
-        <section className="space-y-3">
-          {faqs.map((faq, index) => {
-            const Icon = faq.icon
-            const isOpen = active === index
-
-            return (
-              <div key={faq.question} className="overflow-hidden rounded-xl border border-[#EEEAF3] bg-white">
-                <button
-                  onClick={() => setActive(isOpen ? null : index)}
-                  aria-expanded={isOpen}
-                  className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="rounded-lg bg-[#E9E3FF] p-2 text-[#77709D]">
-                      <Icon size={17} />
-                    </span>
-                    <span className="text-sm font-semibold">{faq.question}</span>
-                  </span>
-
-                  <span className="rounded-full bg-[#F0EEF6] p-1.5 text-[#77709D]">
-                    <ChevronDown size={14} className={isOpen ? 'rotate-180' : ''} />
-                  </span>
-                </button>
-
-                {isOpen && (
-                  <p className="border-t border-[#F0EEF6] px-5 py-4 pl-14 text-xs leading-6 text-[#88849A]">
-                    {faq.answer}
-                  </p>
-                )}
-              </div>
-            )
-          })}
+              return (
+                <article className="rounded-xl border border-[#edece8] bg-white" key={question}>
+                  <h3>
+                    <button
+                      type="button"
+                      className="flex min-h-14 w-full items-center gap-3 rounded-xl p-3 text-left font-semibold sm:p-4"
+                      aria-expanded={isOpen}
+                      aria-controls={`faq-answer-${index}`}
+                      onClick={() => setActive(isOpen ? null : index)}
+                    >
+                      <span className="rounded-lg bg-[#ece7fa] p-2 text-[#585172]"><Icon size={18} aria-hidden="true" /></span>
+                      <span className="flex-1">{question}</span>
+                      <ChevronDown size={18} className={isOpen ? 'shrink-0 rotate-180' : 'shrink-0'} aria-hidden="true" />
+                    </button>
+                  </h3>
+                  <div id={`faq-answer-${index}`} hidden={!isOpen} className="px-3 pb-3 sm:px-4 sm:pb-4">
+                    <ul className="list-disc space-y-1 rounded-lg bg-[#f4f3f0] py-3 pl-8 pr-3 text-sm leading-6 text-[#454052]">
+                      {steps.map((step) => <li key={step}>{step}</li>)}
+                    </ul>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
         </section>
 
-        {/* Contact message */}
-        <section className="mt-5 flex items-center gap-4 rounded-xl border border-[#EEEAF3] bg-white p-4">
-          <div className="rounded-lg bg-[#D9E52E] p-2.5">
-            <CircleHelp size={19} />
-          </div>
+        <section className="mt-6 flex items-start gap-3 rounded-xl border border-[#edece8] bg-white p-4">
+          <span className="rounded-lg bg-[#d9e52e] p-2"><CircleHelp size={19} aria-hidden="true" /></span>
           <div>
-            <h2 className="text-sm font-semibold">
-              Still need a little help?
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-[#88849A]">
-              Our support team is here to help you stay connected.
-              Official support channels and contact details will be published here.
-            </p>
+            <h2 className="font-bold">Contact support</h2>
+            <p className="mt-1 text-sm text-[#655f75]">Support contact details are awaiting confirmation.</p>
           </div>
         </section>
 
-        {/* Back button */}
-        <div className="mt-5 text-center">
-          <Link to="/" className="inline-flex items-center gap-2 rounded-full bg-[#D9E52E] px-8 py-3 text-xs font-semibold hover:brightness-95">
-            <ArrowLeft size={14} />
-            Back to Portal Home
-          </Link>
-          <p className="mt-3 text-[10px] text-[#88849A]">
-            Free portal navigation. You will not be charged data browsing this section.
-          </p>
+        <div className="mt-6 text-center">
+          <Link to="/" className="public-button"><ArrowLeft size={16} aria-hidden="true" /> Back to portal home</Link>
         </div>
-
       </main>
-
-      {/* Footer */}
-      <footer className="mt-5 border-t border-[#EEEAF3] bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5 text-[10px] text-[#88849A]">
-          <span>© 2024 Weza Wi-Fi. Empowering Community Connectivity.</span>
-          <span>WEZA Wi-Fi</span>
-        </div>
-      </footer>
-
-    </div>
+    </>
   )
 }
