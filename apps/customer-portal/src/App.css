@@ -1,4 +1,4 @@
-
+@import "tailwindcss";
 /* ================================
    WEZA THEME
 ================================ */
@@ -13,10 +13,11 @@
   --weza-muted: #88849A;
 }
 
-* {
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 body {

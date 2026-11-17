@@ -1,6 +1,7 @@
 
 
 import { Headset, ArrowUpRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import Logo from './Logo.jsx'
 import { NavigationLinks } from './Navigations'
 
@@ -25,9 +26,9 @@ export default function Sidebar() {
           Reach out whenever you need us.
         </p>
 
-        <button className="support-button">
+        <Link to="/support" className="support-button">
           Get support <ArrowUpRight size={15} />
-        </button>
+        </Link>
       </div>
 
       <div className="sidebar-customer">
