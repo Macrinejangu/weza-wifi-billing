@@ -3,6 +3,7 @@ import { expect, test } from 'vitest'
 import App from './App.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
+import CustomersPage from './pages/CustomersPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 test('renders the operator dashboard shell', () => {
@@ -112,6 +113,44 @@ test('disables navigation destinations that are not implemented', () => {
   const navigation = html.match(/<nav[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? ''
 
   expect(navigation).toContain('aria-current="page"')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(7)
+  expect(navigation).toContain('Customers')
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(6)
   expect(navigation).not.toContain('href="#"')
+})
+
+
+test('renders the customer directory with illustrative summary data', () => {
+  const html = renderToStaticMarkup(<CustomersPage />)
+
+  expect(html).toContain('Customers')
+  expect(html).toContain('1,842')
+  expect(html).toContain('1,429')
+  expect(html).toContain('341')
+  expect(html).toContain('72')
+  expect(html).toContain('94.2%')
+  expect(html).toContain('Illustrative demo data')
+  expect(html).toContain('Amina Wanjiku')
+  expect(html).toContain('Dennis Kiprono')
+  expect(html).toContain('Faith Mwangi')
+  expect(html).toContain('Brian Otieno')
+  expect(html).toContain('Esther Njeri')
+  expect(html).not.toContain('Kevin Mutua')
+})
+
+test('renders customer search, status filters, registration and pagination controls', () => {
+  const html = renderToStaticMarkup(<CustomersPage />)
+
+  expect(html).toContain('Search customers')
+  expect(html).toContain('Search by name, phone number or customer ID')
+  expect(html).toContain('aria-label="Filter customers by status"')
+  expect(html).toContain('aria-pressed="true"')
+  expect(html).toContain('Active')
+  expect(html).toContain('Expired')
+  expect(html).toContain('Flagged')
+  expect(html).toContain('Add customer')
+  expect(html).toContain('View profile')
+  expect(html).toContain('Showing 1–5 of 10 sample records')
+  expect(html).toContain('aria-label="Previous page"')
+  expect(html).toContain('aria-label="Next page"')
+  expect(html).toContain('1 / 2')
 })

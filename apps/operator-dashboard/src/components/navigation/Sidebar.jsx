@@ -1,15 +1,15 @@
 const navigationItems = [
-  { label: 'Overview', icon: 'dashboard', active: true },
-  { label: 'Customers', icon: 'group' },
-  { label: 'Packages', icon: 'inventory_2' },
-  { label: 'Payments', icon: 'payments' },
-  { label: 'Sessions', icon: 'wifi' },
-  { label: 'Connection Issues', icon: 'warning', badge: '3' },
-  { label: 'Network & Devices', icon: 'router' },
-  { label: 'Settings', icon: 'settings' },
+  { id: 'overview', label: 'Overview', icon: 'dashboard', enabled: true },
+  { id: 'customers', label: 'Customers', icon: 'group', enabled: true },
+  { id: 'packages', label: 'Packages', icon: 'inventory_2' },
+  { id: 'payments', label: 'Payments', icon: 'payments' },
+  { id: 'sessions', label: 'Sessions', icon: 'wifi' },
+  { id: 'connection-issues', label: 'Connection Issues', icon: 'warning', badge: '3' },
+  { id: 'network-devices', label: 'Network & Devices', icon: 'router' },
+  { id: 'settings', label: 'Settings', icon: 'settings' },
 ]
 
-export default function Sidebar({ mobileMenuOpen, onClose, operator }) {
+export default function Sidebar({ mobileMenuOpen, onClose, operator, activePage = 'overview', onNavigate = () => {} }) {
   return (
     <aside
       id="operator-sidebar"
@@ -31,11 +31,14 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator }) {
           <button
             key={item.label}
             type="button"
-            className={`navigation-item ${item.active ? 'active' : ''}`}
-            aria-current={item.active ? 'page' : undefined}
-            onClick={item.active ? onClose : undefined}
-            disabled={!item.active}
-            title={item.active ? undefined : "Available in a future release"}
+            className={`navigation-item ${activePage === item.id ? 'active' : ''}`}
+            aria-current={activePage === item.id ? 'page' : undefined}
+            onClick={item.enabled ? () => {
+              onNavigate(item.id)
+              onClose()
+            } : undefined}
+            disabled={!item.enabled}
+            title={item.enabled ? undefined : "Available in a future release"}
           >
             <span className="material-symbols-outlined">
               {item.icon}
