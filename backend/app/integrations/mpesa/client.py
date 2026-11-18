@@ -11,6 +11,7 @@ Design rules, because this code sits in the payment path:
     refused" from "outcome unknown".
   * Tokens, keys and response bodies never appear in logs or error messages.
 """
+
 import logging
 import threading
 import time
@@ -26,6 +27,7 @@ from app.integrations.mpesa.errors import(
     DarajaUnavailableError,
 )
 from app.integrations.mpesa.token_cache import TokenCache
+from app.payments.daraja_password import build_password
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,7 @@ TOKEN_PATH = "/oauth/v1/generate"
 TOKEN_TIMEOUT_SECONDS = 5.0
 TOKEN_MAX_ATTEMPTS = 3
 TOKEN_RETRY_DELAY_SECONDS = 0.5 # multiplied by the attempt number
+
 
 
 class DarajaClient:
