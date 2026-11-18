@@ -4,6 +4,7 @@ import App from './App.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
+import PackagesPage from './pages/PackagesPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 test('renders the operator dashboard shell', () => {
@@ -114,7 +115,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(6)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(5)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -153,4 +154,31 @@ test('renders customer search, status filters, registration and pagination contr
   expect(html).toContain('aria-label="Previous page"')
   expect(html).toContain('aria-label="Next page"')
   expect(html).toContain('1 / 2')
+})
+
+
+test('renders the five supplied internet packages', () => {
+  const html = renderToStaticMarkup(<PackagesPage />)
+
+  expect(html).toContain('Internet Packages')
+  expect(html).toContain('1-Hour Quick Connect')
+  expect(html).toContain('24-Hour Day Pass')
+  expect(html).toContain('Weekly Plus 10GB')
+  expect(html).toContain('Monthly FastTrack 50GB')
+  expect(html).toContain('Night Owl Unlimited')
+  expect(html).toContain('KES 900')
+  expect(html).toContain('New Package')
+  expect(html).toContain('Illustrative package data')
+})
+
+test('renders package filters with the correct category counts', () => {
+  const html = renderToStaticMarkup(<PackagesPage />)
+
+  expect(html).toContain('All Tiers')
+  expect(html).toContain('Hourly / Passes')
+  expect(html).toContain('Weekly / Monthly')
+  expect(html).toContain('aria-label="Filter packages"')
+  expect(html).toContain('>5</span>')
+  expect(html).toContain('>3</span>')
+  expect(html).toContain('>2</span>')
 })
