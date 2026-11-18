@@ -109,7 +109,7 @@ class DarajaClient:
                     # A definite answer: parse it. Do not retry refusals.
                     return self._parse_token_response(response)
                 last_error = DarajaUnavailableError(
-                    f"Daraja toke endpoint returned HTTP {response.status_code}."
+                    f"Daraja token endpoint returned HTTP {response.status_code}."
                 )
 
             logger.warning(
@@ -129,7 +129,7 @@ class DarajaClient:
         if response.status_code != 200:
             # Wrong credentials and similar. The body is deliberately not included: error bodies can echo request details.
             raise DarajaAuthError(
-                f"Daraja refused the token request (HTTP {response.status_code})"
+                f"Daraja refused the token request (HTTP {response.status_code})."
             )
         try:
             body = response.json()
@@ -138,7 +138,11 @@ class DarajaClient:
             expires_in = int(body["expires_in"])
         except(ValueError, KeyError, TypeError):
             # `from None` so the original error, which may hold body text, is not attached to the exception and written to logs.
-            raise DarajaAuthError("Daraja returned an unusable token response.")
+            raise DarajaAuthError("Daraja returned an unusable token response.") from None
         if not isinstance(token, str) or not token:
+            raise DarajaAuthError("Daraja returned an unusable token response.")
+        if expires_in <= 0:
+            # A token that is already expired is unusable. Reject it here so the
+            # cache's ValueError never escapes as an unhandled error.
             raise DarajaAuthError("Daraja returned an unusable token response.")
         return token, expires_in
