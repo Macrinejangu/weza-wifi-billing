@@ -1,9 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime
-from sqlalchemy.sql import func
-from app.db.base import Base
+from app.db.base import Base, TimestampMixin
 
 
-class AccessPoint(Base):
+class AccessPoint(TimestampMixin, Base):
     __tablename__ = "access_points"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -11,4 +10,3 @@ class AccessPoint(Base):
     location = Column(String(150), nullable=True)
     mac_address = Column(String(50), unique=True, nullable=True)
     status = Column(String(20), default="offline", nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
