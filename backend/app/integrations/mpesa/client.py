@@ -27,7 +27,7 @@ from app.integrations.mpesa.errors import(
     DarajaUnavailableError,
 )
 from app.integrations.mpesa.token_cache import TokenCache
-from app.payments.daraja_password import build_password
+
 
 logger = logging.getLogger(__name__)
 
