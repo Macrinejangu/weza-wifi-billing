@@ -4,6 +4,7 @@ import App from './App.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
+import PackagesPage from './pages/PackagesPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 test('renders the operator dashboard shell', () => {
@@ -114,7 +115,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(6)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(5)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -158,4 +159,31 @@ test('renders customer search, status filters, registration and pagination contr
   expect(html).toContain('aria-label="Previous page"')
   expect(html).toContain('aria-label="Next page"')
   expect(html).toContain('1 / 2')
+})
+
+
+test('renders the six demo internet packages', () => {
+  const html = renderToStaticMarkup(<PackagesPage />)
+
+  expect(html).toContain('>Packages</h1>')
+  expect(html).toContain('Quick Connect')
+  expect(html).toContain('Daily Connect')
+  expect(html).toContain('Weekly Plus')
+  expect(html).toContain('Monthly Max')
+  expect(html).toContain('Night Owl 12h')
+  expect(html).toContain('Unlimited 24h')
+  expect(html).toContain('Add Package')
+  expect(html).toContain('Demo data')
+})
+
+test('renders package status and type filters with counts derived from the demo rows', () => {
+  const html = renderToStaticMarkup(<PackagesPage />)
+
+  expect(html).toContain('Filter packages by status')
+  expect(html).toContain('Filter packages by type')
+  expect(html).toContain('All (6)')
+  expect(html).toContain('Active (5)')
+  expect(html).toContain('Inactive (1)')
+  expect(html).toContain('Hotspot Captive')
+  expect(html).toContain('Home Fiber')
 })
