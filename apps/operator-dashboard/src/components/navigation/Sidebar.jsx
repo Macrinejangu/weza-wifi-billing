@@ -40,7 +40,7 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator, activePage 
             disabled={!item.enabled}
             title={item.enabled ? undefined : 'Unavailable in this preview'}
           >
-            <span className="material-symbols-outlined">
+            <span className="material-symbols-outlined" aria-hidden="true">
               {item.icon}
             </span>
 
