@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
+import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 test('renders the operator dashboard shell', () => {
@@ -116,7 +117,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(4)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(3)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -213,4 +214,31 @@ test('renders payment search, status filters and inspection controls', () => {
   expect(html).toContain('Inspect')
   expect(html).toContain('Today')
   expect(html).toContain('EAT (UTC+3)')
+})
+
+
+test('renders active session monitoring with illustrative KPI data', () => {
+  const html = renderToStaticMarkup(<SessionsPage />)
+
+  expect(html).toContain('Active Sessions')
+  expect(html).toContain('DEMO MODE')
+  expect(html).toContain('NOT CONNECTED')
+  expect(html).toContain('1.42 Gbps')
+  expect(html).toContain('99.8%')
+  expect(html).toContain('Amina Wanjiku')
+  expect(html).toContain('John Kariuki')
+  expect(html).toContain('Brenda Mutua')
+  expect(html).toContain('David Kipchirchir')
+  expect(html).toContain('Esther Kemboi')
+  expect(html).toContain('Illustrative')
+})
+
+test('renders session search, filters and inspection controls', () => {
+  const html = renderToStaticMarkup(<SessionsPage />)
+
+  expect(html).toContain('Search sessions')
+  expect(html).toContain('Voucher')
+  expect(html).toContain('Monthly / SME')
+  expect(html).toContain('View Details')
+  expect(html).toContain('Page 1 of 1')
 })
