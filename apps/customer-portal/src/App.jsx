@@ -4,6 +4,7 @@ import CustomerLayout from './components/layout/CustomerLayout'
 import ConfirmPackage from './pages/ConfirmPackage'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import HotspotEntry from './pages/HotspotEntry'
 import Packages from './pages/Packages'
 import Payments from './pages/Payments'
 import Profile from './pages/Profile'
@@ -11,6 +12,7 @@ import Register from './pages/Register'
 import Support from './pages/Support'
 import Usage from './pages/Usage'
 import Welcome from './pages/Welcome'
+import PackageExpired from './pages/PackageExpired'
 
 export default function App() {
   return (
@@ -19,6 +21,8 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/support" element={<Support />} />
+      <Route path="/package-expired" element={<PackageExpired />} />
+      <Route path="/hotspot-entry" element={<HotspotEntry />} />
 
       <Route element={<CustomerLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
