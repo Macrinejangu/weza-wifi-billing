@@ -5,6 +5,7 @@ import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
+import PaymentsPage from './pages/PaymentsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 test('renders the operator dashboard shell', () => {
@@ -115,7 +116,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(5)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(4)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -181,4 +182,35 @@ test('renders package filters with the correct category counts', () => {
   expect(html).toContain('>5</span>')
   expect(html).toContain('>3</span>')
   expect(html).toContain('>2</span>')
+})
+
+
+test('renders payment monitoring KPIs and illustrative transactions', () => {
+  const html = renderToStaticMarkup(<PaymentsPage />)
+
+  expect(html).toContain('Payments &amp; Vouchers')
+  expect(html).toContain('KES 84,250')
+  expect(html).toContain('98.2%')
+  expect(html).toContain('612 processed')
+  expect(html).toContain('Dennis Kiprono')
+  expect(html).toContain('Amina Wanjiku')
+  expect(html).toContain('Grace Mwangi')
+  expect(html).toContain('RJ92MN41P0')
+  expect(html).toContain('DEMO MODE')
+  expect(html).toContain('NOT CONNECTED')
+  expect(html).toContain('Illustrative payment records')
+})
+
+test('renders payment search, status filters and inspection controls', () => {
+  const html = renderToStaticMarkup(<PaymentsPage />)
+
+  expect(html).toContain('Search payments')
+  expect(html).toContain('Search customer, phone, or receipt')
+  expect(html).toContain('Filter payments by status')
+  expect(html).toContain('All transactions')
+  expect(html).toContain('Confirmed')
+  expect(html).toContain('Pending')
+  expect(html).toContain('Inspect')
+  expect(html).toContain('Today')
+  expect(html).toContain('EAT (UTC+3)')
 })

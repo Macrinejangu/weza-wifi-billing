@@ -3,6 +3,7 @@ import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
+import PaymentsPage from './pages/PaymentsPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
@@ -22,6 +23,8 @@ export default function App() {
           <CustomersPage />
         ) : activePage === 'packages' ? (
           <PackagesPage />
+        ) : activePage === 'payments' ? (
+          <PaymentsPage />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}
