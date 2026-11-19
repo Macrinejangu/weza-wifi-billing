@@ -2,6 +2,7 @@ import { useState } from 'react'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
+import PackagesPage from './pages/PackagesPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
@@ -19,6 +20,8 @@ export default function App() {
       >
         {activePage === 'customers' ? (
           <CustomersPage />
+        ) : activePage === 'packages' ? (
+          <PackagesPage />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}
