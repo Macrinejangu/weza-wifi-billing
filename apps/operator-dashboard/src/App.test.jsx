@@ -5,6 +5,7 @@ import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
+import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 vi.hoisted(() => {
@@ -120,7 +121,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(5)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(4)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -191,4 +192,37 @@ test('renders package status and type filters with counts derived from the demo 
   expect(html).toContain('Inactive (1)')
   expect(html).toContain('Hotspot Captive')
   expect(html).toContain('Home Fiber')
+})
+
+test('renders active session monitoring with illustrative KPI data', () => {
+  const html = renderToStaticMarkup(<SessionsPage />)
+
+  expect(html).toContain('Active Sessions')
+  expect(html).toContain('DEMO MODE')
+  expect(html).toContain('NOT CONNECTED')
+  expect(html).toContain('Expiring Soon')
+  expect(html).toContain('Failed Activations')
+  expect(html).toContain('<strong>1,248</strong>')
+  expect(html).toContain('<strong>18</strong>')
+  expect(html).toContain('<strong>2</strong>')
+  expect(html).toContain('Amina Wanjiku')
+  expect(html).toContain('John Kariuki')
+  expect(html).toContain('Brenda Mutua')
+  expect(html).toContain('David Kipchirchir')
+  expect(html).toContain('Esther Kemboi')
+  expect(html).toContain('Illustrative')
+})
+
+test('renders session search, filters and inspection controls', () => {
+  const html = renderToStaticMarkup(<SessionsPage />)
+
+  expect(html).toContain('Search sessions')
+  expect(html).toContain('Voucher')
+  expect(html).toContain('Monthly / SME')
+  expect(html).toContain('Active Authentications')
+  expect(html).toContain('Connection status')
+  expect(html).toContain('Expiry time')
+  expect(html).toContain('Fixed snapshot')
+  expect(html).toContain('aria-label="Inspect session for Amina Wanjiku"')
+  expect(html).toContain('Page 1 of 1')
 })
