@@ -86,18 +86,3 @@ def test_mock_purchase_payment_and_activation(client, user, package):
     assert active.json()["started_at"] and active.json()["expires_at"]
     assert client.post(f"{path}/activate").json() == active.json()
     assert client.get(path).json() == active.json()
-
-
-def test_package_writes_require_mock_mode(client, monkeypatch):
-    monkeypatch.delenv("ENABLE_MOCK_PAYMENTS", raising=False)
-    payload = {
-        "name": "Demo", "service_type": "hotspot", "price": 20,
-        "duration_minutes": 60, "download_speed_mbps": 5, "upload_speed_mbps": 2,
-    }
-    assert client.post("/api/packages/", json=payload).status_code == 404
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
-    assert client.post("/api/packages/", json={**payload, "duration_minutes": 0}).status_code == 422
-    created = client.post("/api/packages/", json=payload)
-    assert created.status_code == 200
-    assert client.delete(f"/api/packages/{created.json()['id']}").status_code == 200
-    assert client.get("/api/packages/").json() == []

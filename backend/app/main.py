@@ -1,16 +1,32 @@
+import os
+
 from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.auth import router as auth_router
 from app.api.billing import router as billing_router
 from app.api.health import router as health_router
 from app.api.mock_mode import require_mock_mode
 from app.api.packages import router as packages_router
 from app.api.router import router as router_status_router
 from app.api.sessions import router as sessions_router
+from app.api.staff import router as staff_router
 
 app = FastAPI(title="Weza Wi-Fi Billing API")
 
+# Lets the two React apps (customer portal :5173, operator dashboard :5174) call this API.
+FRONTENDS = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("CORS_ORIGINS", FRONTENDS).split(","),
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
 app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(staff_router)
 app.include_router(router_status_router)
 app.include_router(packages_router, prefix="/api")
 app.include_router(billing_router, dependencies=[Depends(require_mock_mode)])
