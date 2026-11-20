@@ -38,7 +38,7 @@ function StatusPill({ status, type = 'payment' }) {
   )
 }
 
-function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue }) {
+function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue, onOpenProfile }) {
   const drawerRef = useRef(null)
   const closeButtonRef = useRef(null)
   const [drawerNotice, setDrawerNotice] = useState('')
@@ -179,7 +179,7 @@ function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue }) {
           <section className="payment-detail-section">
             <div className="payment-detail-heading">
               <h3>Subscriber details</h3>
-              <button type="button" className="payment-drawer-link" onClick={() => setDrawerNotice('The full Customer Profile screen is pending. Subscriber details are shown below.')}>View Profile <span aria-hidden="true">→</span></button>
+              <button type="button" className="payment-drawer-link" onClick={() => onOpenProfile ? onOpenProfile(transaction) : setDrawerNotice('Subscriber details are shown below.')}>View Profile <span aria-hidden="true">→</span></button>
             </div>
             <div className="payment-subscriber">
               <span className="payment-subscriber-avatar" aria-hidden="true">{initials}</span>
@@ -223,8 +223,8 @@ function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue }) {
   )
 }
 
-export default function PaymentsPage({ onInspectIssue }) {
-  return demoDataEnabled ? <DemoPaymentsPage onInspectIssue={onInspectIssue} /> : (
+export default function PaymentsPage({ onInspectIssue, onOpenProfile }) {
+  return demoDataEnabled ? <DemoPaymentsPage onInspectIssue={onInspectIssue} onOpenProfile={onOpenProfile} /> : (
     <section className="payment-monitor-page">
       <h1>Payments</h1>
       <p role="status">Payment records are currently unavailable.</p>
@@ -232,7 +232,7 @@ export default function PaymentsPage({ onInspectIssue }) {
   )
 }
 
-function DemoPaymentsPage({ onInspectIssue }) {
+function DemoPaymentsPage({ onInspectIssue, onOpenProfile }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedPackage, setSelectedPackage] = useState('')
@@ -401,6 +401,7 @@ function DemoPaymentsPage({ onInspectIssue }) {
           transaction={inspection.transaction}
           trigger={inspection.trigger}
           onInspectIssue={onInspectIssue}
+          onOpenProfile={onOpenProfile}
           onClose={() => setInspection(null)}
         />
       )}

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
-import CustomersPage from './pages/CustomersPage.jsx'
+import CustomersPage, { initialCustomers } from './pages/CustomersPage.jsx'
+import CustomerProfilePage from './pages/CustomerProfilePage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
@@ -21,9 +22,27 @@ export default function App() {
 
   const [selectedIssueId, setSelectedIssueId] = useState(null)
 
+  const [profile, setProfile] = useState(null)
+
   function navigate(page) {
+    setProfile(null)
     setSelectedIssueId(null)
     setActivePage(page)
+  }
+
+  function openCustomerProfile(customer) {
+    setProfile({ customer, from: 'customers' })
+    setActivePage('customer-profile')
+  }
+
+  function openPaymentProfile(payment) {
+    const phoneDigits = (phone) => phone.replace(/\D/g, '')
+    const match = initialCustomers.find((customer) =>
+      customer.name === payment.customer && phoneDigits(customer.phone) === phoneDigits(payment.phone),
+    )
+    const customer = match ?? { name: payment.customer, phone: payment.phone, plan: payment.package }
+    setProfile({ customer: { ...customer, payment }, from: 'payments' })
+    setActivePage('customer-profile')
   }
 
   function inspectIssue(issueId) {
@@ -40,15 +59,21 @@ export default function App() {
     return (
       <DashboardLayout
         operator={developmentOperator}
-        activePage={activePage === 'audit-history' ? 'settings' : activePage}
+        activePage={activePage === 'audit-history' ? 'settings' : activePage === 'customer-profile' ? profile?.from : activePage}
         onNavigate={navigate}
       >
         {activePage === 'customers' ? (
-          <CustomersPage />
+          <CustomersPage onOpenProfile={openCustomerProfile} />
+        ) : activePage === 'customer-profile' ? (
+          <CustomerProfilePage
+            customer={profile?.customer}
+            backLabel={profile?.from === 'payments' ? 'Payments' : 'Customers Directory'}
+            onBack={() => navigate(profile?.from ?? 'customers')}
+          />
         ) : activePage === 'packages' ? (
           <PackagesPage />
         ) : activePage === 'payments' ? (
-          <PaymentsPage onInspectIssue={inspectIssue} />
+          <PaymentsPage onInspectIssue={inspectIssue} onOpenProfile={openPaymentProfile} />
         ) : activePage === 'sessions' ? (
           <SessionsPage />
         ) : activePage === 'connection-issues' ? (
