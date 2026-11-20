@@ -1,17 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from app.api.auth import current_staff
 from app.api.mock_mode import require_mock_mode
 from app.db.session import get_db
 from app.models.package import Package
 from app.schemas.package import PackageCreate, PackageUpdate, PackageResponse
 
 router = APIRouter(prefix="/packages", tags=["Packages"])
+package_write_dependencies = [Depends(require_mock_mode), Depends(current_staff)]
 
 @router.get("/", response_model=list[PackageResponse])
 def get_packages(db: Session = Depends(get_db)):
     return db.query(Package).filter_by(is_active=True).order_by(Package.id).all()
 
-@router.post("/", response_model=PackageResponse, dependencies=[Depends(require_mock_mode)])
+@router.post("/", response_model=PackageResponse, dependencies=package_write_dependencies)
 def add_package(data: PackageCreate, db: Session = Depends(get_db)):
     package = Package(**data.model_dump())
     db.add(package)
@@ -19,7 +21,7 @@ def add_package(data: PackageCreate, db: Session = Depends(get_db)):
     db.refresh(package)
     return package
 
-@router.put("/{package_id}", response_model=PackageResponse, dependencies=[Depends(require_mock_mode)])
+@router.put("/{package_id}", response_model=PackageResponse, dependencies=package_write_dependencies)
 def update_package(package_id: int, data: PackageUpdate, db: Session = Depends(get_db)):
     package = db.query(Package).filter(Package.id == package_id).first()
 
@@ -33,7 +35,7 @@ def update_package(package_id: int, data: PackageUpdate, db: Session = Depends(g
     db.refresh(package)
     return package
 
-@router.delete("/{package_id}", dependencies=[Depends(require_mock_mode)])
+@router.delete("/{package_id}", dependencies=package_write_dependencies)
 def deactivate_package(package_id: int, db: Session = Depends(get_db)):
     package = db.query(Package).filter(Package.id == package_id).first()
 

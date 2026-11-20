@@ -11,6 +11,10 @@ FastAPI publishes the full request and response schemas at `/docs` and `/openapi
 
 Use a local PostgreSQL database migrated with `python -m alembic upgrade head` from `backend/`. Set `ENABLE_MOCK_PAYMENTS=true` only in the local demo environment and use fixture users and phone numbers. The demo routes return HTTP 404 when disabled.
 
+Set a unique random `JWT_SECRET` in the root `.env` and run `python -m app.create_staff` from `backend/` to create a staff account.
+
+Package creation, editing, and deactivation also require a bearer token from `POST /api/auth/login`. Send the token in the `Authorization` header. An active customer receives HTTP 403. Missing, invalid, or expired tokens and suspended staff receive HTTP 401. Public package viewing stays available.
+
 | Request | Required input | Success response |
 | --- | --- | --- |
 | `POST /api/packages/` | `name`, `service_type`, positive integer `price`, `duration_minutes`, `download_speed_mbps` and `upload_speed_mbps`. Optional `description`. | 200 and the created package. |

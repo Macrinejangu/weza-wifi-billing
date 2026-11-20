@@ -1,8 +1,6 @@
-
-
-
 import { Headset, ArrowUpRight, Router } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { NavigationLinks } from './layout/Navigation'
 
 export default function Sidebar() {
@@ -47,23 +45,24 @@ export default function Sidebar() {
 
       </div>
 
-      {/* Customer information */}
-      <div className="border-t border-[#F0EEF6] pt-5 flex items-center gap-3">
+      {demoDataEnabled && (
+        <div className="border-t border-[#F0EEF6] pt-5 flex items-center gap-3">
 
-        <div className="w-10 h-10 rounded-full bg-[#F0EEF6] text-[#77709D] flex items-center justify-center font-bold text-sm">
-          EM
+          <div className="w-10 h-10 rounded-full bg-[#F0EEF6] text-[#77709D] flex items-center justify-center font-bold text-sm">
+            EM
+          </div>
+
+          <div>
+            <h4 className="text-sm font-bold text-[#17152D]">
+              Customer
+            </h4>
+            <p className="text-xs text-[#88849A]">
+              WEZA member
+            </p>
+          </div>
+
         </div>
-
-        <div>
-          <h4 className="text-sm font-bold text-[#17152D]">
-            Customer
-          </h4>
-          <p className="text-xs text-[#88849A]">
-            WEZA member
-          </p>
-        </div>
-
-      </div>
+      )}
 
     </aside>
   )

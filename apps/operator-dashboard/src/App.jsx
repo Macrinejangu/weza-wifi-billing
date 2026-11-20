@@ -3,7 +3,9 @@ import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
+import PaymentsPage from './pages/PaymentsPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import { demoDataEnabled } from '../../shared/demoMode.js'
 import { developmentOperator } from './operatorIdentity.js'
 
 export default function App() {
@@ -11,7 +13,7 @@ export default function App() {
   const [showDashboardPreview, setShowDashboardPreview] = useState(false)
   const [activePage, setActivePage] = useState('overview')
 
-  if (import.meta.env.DEV && showDashboardPreview) {
+  if (demoDataEnabled && showDashboardPreview) {
     return (
       <DashboardLayout
         operator={developmentOperator}
@@ -22,6 +24,8 @@ export default function App() {
           <CustomersPage />
         ) : activePage === 'packages' ? (
           <PackagesPage />
+        ) : activePage === 'payments' ? (
+          <PaymentsPage />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}
@@ -40,7 +44,7 @@ export default function App() {
 
   return (
     <LoginPage
-      operator={developmentOperator}
+      operator={demoDataEnabled ? developmentOperator : undefined}
       onPreviewDashboard={() => setShowDashboardPreview(true)}
     />
   )
