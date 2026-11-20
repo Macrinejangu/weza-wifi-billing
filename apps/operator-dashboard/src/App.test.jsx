@@ -5,6 +5,7 @@ import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
+import PaymentsPage from './pages/PaymentsPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
@@ -121,7 +122,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(4)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(3)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -225,4 +226,19 @@ test('renders session search, filters and inspection controls', () => {
   expect(html).toContain('Fixed snapshot')
   expect(html).toContain('aria-label="Inspect session for Amina Wanjiku"')
   expect(html).toContain('Page 1 of 1')
+})
+
+
+test('renders the Payments preview with separate settlement and access statuses', () => {
+  const html = renderToStaticMarkup(<PaymentsPage />)
+
+  expect(html).toContain('KES 142,850')
+  expect(html).toContain('Demo data')
+  expect(html).toContain('Search payments')
+  expect(html).toContain('Filter payments by package')
+
+  const transaction = html.match(/<tr><th[^>]*>RJ92MN38X2<\/th>[\s\S]*?<\/tr>/)?.[0]
+  expect(transaction).toContain('Confirmed')
+  expect(transaction).toContain('Activation Failed')
+  expect(transaction).toContain('Inspect payment for Dennis Kiprono')
 })
