@@ -1,11 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import App from './App.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
+
+vi.hoisted(() => {
+  vi.stubEnv('DEV', true)
+  vi.stubEnv('VITE_USE_DEMO_DATA', 'true')
+})
 
 test('renders the operator dashboard shell', () => {
   const html = renderToStaticMarkup(<DashboardLayout operator={developmentOperator}><DashboardPage operator={developmentOperator} /></DashboardLayout>)

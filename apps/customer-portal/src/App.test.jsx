@@ -6,6 +6,11 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App.jsx'
 
+vi.hoisted(() => {
+  vi.stubEnv('DEV', true)
+  vi.stubEnv('VITE_USE_DEMO_DATA', 'true')
+})
+
 let container
 let root
 

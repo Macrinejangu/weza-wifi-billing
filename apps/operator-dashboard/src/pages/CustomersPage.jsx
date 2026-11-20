@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import '../styles/customers.css'
 
-const initialCustomers = [
+const initialCustomers = demoDataEnabled ? [
   { id: 'CUS-001842', name: 'Amina Wanjiku', phone: '+254 712 345 678', mpesaVerified: true, status: 'Active', plan: 'Premium Plan', price: 2500, used: 18.4, quota: 50 },
   { id: 'CUS-001841', name: 'Dennis Kiprono', phone: '+254 722 111 234', mpesaVerified: true, status: 'Active', plan: 'Basic Plan', price: 1000, used: 4.2, quota: 10 },
   { id: 'CUS-001840', name: 'Faith Mwangi', phone: '+254 733 456 789', mpesaVerified: false, status: 'Expired', plan: 'Standard Plan', price: 1500, used: 10, quota: 10 },
@@ -17,7 +18,7 @@ const initialCustomers = [
   registeredOn: `2026-11-${String(10 + index).padStart(2, '0')}`,
   expiresOn: customer.status === 'Expired' ? '2026-11-18' : '2026-11-26',
   connection: ['Online', 'Offline', 'Offline', 'Online', 'Offline', 'Offline', 'Offline', 'Online', 'Offline', 'Online'][index],
-}))
+})) : []
 
 const statuses = ['All', 'Active', 'Expired', 'Flagged']
 

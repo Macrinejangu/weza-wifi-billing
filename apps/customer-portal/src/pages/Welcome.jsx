@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import {
   ArrowRight,
   Clock3,
@@ -57,7 +58,7 @@ export default function Welcome() {
           <article className="welcome-feature-card">
             <Smartphone size={22} aria-hidden="true" />
             <h2>Pay in a moment</h2>
-            <p>Use your M-Pesa number at checkout.</p>
+            <p>{demoDataEnabled ? 'Preview M-Pesa checkout.' : 'M-Pesa checkout is currently unavailable.'}</p>
           </article>
 
           <article className="welcome-feature-card">

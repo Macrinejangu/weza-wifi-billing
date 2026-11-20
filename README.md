@@ -64,7 +64,29 @@ If you open a new terminal for the backend, activate its virtual environment aga
 | `npm run dev:operator` | [Operator dashboard](http://127.0.0.1:5174) |
 | Backend command above | [Health](http://127.0.0.1:8000/health) and [OpenAPI docs](http://127.0.0.1:8000/docs) |
 
-Expect one starter heading per app and `{"status":"ok"}` from the API. The apps and API liveness check also run without PostgreSQL. See the [database guide](docs/database-decision.md) for the migration check and port configuration.
+The API health endpoint returns `{"status":"ok"}`. See the [database guide](docs/database-decision.md) for the migration check and port configuration.
+
+### Frontend demo mode
+
+Both apps default to live data or an unavailable state. To use demo records, add
+the following to `.env.development.local` inside the app you want to preview
+(`apps/customer-portal` or `apps/operator-dashboard`), then restart Vite.
+
+```dotenv
+VITE_USE_DEMO_DATA=true
+```
+
+Open **Preview Dashboard (Development Only)** on the staff sign-in screen for
+the operator preview. The customer portal shows demo records on the existing
+routes. Demo changes and checkout are local previews. Production builds
+disable demo mode even when the flag is set.
+
+For the customer portal's live package catalogue, set
+`VITE_API_BASE_URL=http://127.0.0.1:8000` in
+`apps/customer-portal/.env.development.local` when running the backend locally.
+When unset, the portal requests `/api/packages/` on the same origin. Set
+`VITE_API_BASE_URL` at build time if the production API uses a different origin,
+and add the frontend origin to the API's `CORS_ORIGINS`.
 
 ## Batch 3 · Run checks and start your Jira task
 
