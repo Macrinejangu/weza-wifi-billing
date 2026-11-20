@@ -17,8 +17,11 @@ Error messages deliberately never include the raw value, so a phone number
 cannot leak into logs through an exception message.
 """
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+
+from app.payments.result_codes import SUCCESS_RESULT_CODE, parse_result_code
 
 class MalformedCallbackError(ValueError):
     """A callback field is missing, has the wrong type or has a bad value.
@@ -42,14 +45,14 @@ _TRANSACTION_DATE = re.compile(r"[0-9]{14}")
 # Daraja timestamps are Nairobi local time, a fixed UTC+3 offset 
 _NAIROBI = timezone(timedelta(hours=3))
 
-def _int_or_str_as_text(raw: object, field: str) -> str:
+def _int_or_str_as_text(raw: object, field_name: str) -> str:
     """Return raw as text if it is an int or a str; reject everything else.
 
     bool is rejected explicitly because bool is a subclass of int in Python.
     Floats are rejected so 254708374149.0 is never quietly accepted.
     """
     if isinstance(raw, bool) or not isinstance(raw, (int,str)):
-        raise MalformedCallbackError(f"{field} must be an integer or a string")
+        raise MalformedCallbackError(f"{field_name} must be an integer or a string")
     return str(raw)
 
 
@@ -99,3 +102,135 @@ def parse_transaction_date(raw: object) -> datetime:
     except ValueError:
         raise MalformedCallbackError("TransactionDate is not a real date and time") from None
     return naive.replace(tzinfo=_NAIROBI)
+
+
+# ---------- The callback envelope ----------
+
+# IDs in the official samples use letters, digits, "_" and "-". The 100-char
+# bound stops absurdly long strings reaching our database queries.
+_REQUEST_ID = re.compile(r"[A-Za-z0-9_-]{1,100}")
+# The Daraja docs give 1024 as the maximum length of ResultDesc.
+_MAX_RESULT_DESC_LENGTH = 1024
+# A real success carries 4 to 5 items. This cap stops a huge array being
+# walked just to be rejected.
+_MAX_METADATA_ITEMS = 20
+
+@dataclass(frozen=True)
+class StkCallback:
+    """A validated STK Push callback.
+
+    The four payment fields are None on a failure, because Daraja sends
+    CallbackMetadata only on success. On a success all four are set.
+
+    frozen=True makes the object immutable, so nothing can change a verified
+    value between parsing and comparing it with our stored payment.
+    """
+
+    merchant_request_id: str
+    checkout_request_id: str
+    result_code: int
+    result_desc: str
+    amount: int | None
+    mpesa_receipt_number: str | None
+    # repr=False keeps the payer's number out of logs and tracebacks, which
+    # print repr(self) when this object is logged by mistake.
+    phone_number: str | None = field(repr=False)
+    transaction_date: datetime | None
+
+    @property
+    def is_success(self) -> bool:
+        """True only for ResultCode 0. This says nothing about the amount or
+        phone matching; step 4's verification does that."""
+        return self.result_code == SUCCESS_RESULT_CODE
+
+    
+
+def _require_object(value: object, what:str) -> dict:
+    """Return value if it is a JSON object (a dict), else raise."""
+    if not isinstance(value, dict):
+        raise MalformedCallbackError(f"{what} must be a JSON object")
+    return value
+
+def _parse_request_id(raw: object, field_name: str) -> str:
+    """Return a Daraja request ID, or raise."""
+    if not isinstance(raw, str) or not _REQUEST_ID.fullmatch(raw):
+        raise MalformedCallbackError(f"{field_name} is not a valid request ID")
+    return raw
+
+def _metadata_values(stk_callback: dict) -> dict[str, object]:
+    """Flatten CallbackMetadata.Item into {Name: Value}, or raise.
+
+    Daraja sends a list of {"Name": ..., "Value": ...} objects. Some items,
+    such as Balance, can arrive without a Value, so a missing Value becomes
+    None here and only matters if we actually require that item.
+    """
+    metadata = _require_object(
+        stk_callback.get("CallbackMetadata"), "CallbackMetadata"
+    )
+    items = metadata.get("Item")
+    if not isinstance(items, list) or len(items) > _MAX_METADATA_ITEMS:
+        raise MalformedCallbackError("CallbackMetadata.Item is not a usable list")
+
+    values: dict[str,object] = {}
+    for item in items:
+        item = _require_object(item, "CallbackMetadata item")
+        name = item.get("Name")
+        if not isinstance(name, str):
+            raise MalformedCallbackError("A metadata item has no valid Name")
+        if name in values:
+            # Two values for one name: we cannot know which one is true.
+            raise MalformedCallbackError("A metadata item appears twice")
+        values[name] = item.get("Value")
+    return values
+
+def parse_stk_callback(payload: object) -> StkCallback:
+    """Validate a raw callback body and return an StkCallback, or raise.
+
+    `payload` is the decoded JSON exactly as received. Any problem raises
+    MalformedCallbackError and the caller must treat the callback as
+    unverified. A valid result is still NOT proof of payment: it must also
+    match a payment we created.
+    """
+    root = _require_object(payload, "The callback body")
+    body = _require_object(root.get("Body"), "Body")
+    stk_callback = _require_object(body.get("stkCallback"), "stkCallback")
+
+    merchant_request_id = _parse_request_id(stk_callback.get("MerchantRequestID"), "MerchantRequestID")
+    checkout_request_id = _parse_request_id(stk_callback.get("CheckoutRequestID"), "CheckoutRequestID")
+
+    result_code = parse_result_code(stk_callback.get("ResultCode"))
+    if result_code is None:
+        raise MalformedCallbackError("ResultCode is not a clean integer")
+
+    result_desc = stk_callback.get("ResultDesc")
+    if not isinstance(result_desc, str) or len(result_desc) > _MAX_RESULT_DESC_LENGTH:
+        raise MalformedCallbackError("ResultDesc is missing or too long")
+
+    if result_code != SUCCESS_RESULT_CODE:
+        # A failure carries no payment details. We deliberately do not read
+        # CallbackMetadata at all, so junk there cannot turn a clear failure
+        # into a rejected callback.
+        return StkCallback(
+            merchant_request_id=merchant_request_id,
+            checkout_request_id=checkout_request_id,
+            result_code=result_code,
+            result_desc=result_desc,
+            amount=None,
+            mpesa_receipt_number=None,
+            phone_number=None,
+            transaction_date=None,
+        )
+    # A success without all four details cannot be verified, so it is
+    # rejected. A genuine payment behind such a callback is recovered later
+    # by the STK status query
+    values = _metadata_values(stk_callback)
+    return StkCallback(
+        merchant_request_id=merchant_request_id,
+        checkout_request_id=checkout_request_id,
+        result_code=result_code,
+        result_desc=result_desc,
+        amount=parse_amount(values.get("Amount")),
+        mpesa_receipt_number=parse_receipt(values.get("MpesaReceiptNumber")),
+        phone_number=parse_phone(values.get("PhoneNumber")),
+        transaction_date=parse_transaction_date(values.get("TransactionDate")),
+    )
