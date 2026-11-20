@@ -1,3 +1,4 @@
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import {
   Wifi,
   Radio,
@@ -33,7 +34,7 @@ export default function HotspotEntry() {
               <span className="w-2 h-2 rounded-full bg-[#88849A]" />
               <Wifi size={13} className="text-[#77709D]" />
               <span className="text-[10px] text-[#17152D]">
-                Portal preview
+                {demoDataEnabled ? 'Portal preview' : 'Customer portal'}
               </span>
             </div>
           </div>
@@ -83,7 +84,7 @@ export default function HotspotEntry() {
             <div className="inline-flex items-center gap-2 rounded-full bg-[#F0EEF6] px-3 py-1.5 mb-5">
               <Radio size={12} className="text-[#77709D]" />
               <span className="text-[9px] font-semibold tracking-wide text-[#655F75]">
-                PUBLIC HOTSPOT PREVIEW
+                {demoDataEnabled ? 'PUBLIC HOTSPOT PREVIEW' : 'PUBLIC HOTSPOT'}
               </span>
             </div>
 
@@ -100,7 +101,7 @@ export default function HotspotEntry() {
             </h1>
 
             <p className="text-xs leading-5 text-[#655F75] mt-2">
-              Browse sample packages and preview the checkout flow.
+              {demoDataEnabled ? 'Browse sample packages and preview the checkout flow.' : 'Browse available internet packages.'}
             </p>
 
             <div className="mt-6 rounded-lg bg-[#F7F6F2] p-3 flex items-center justify-between gap-2">
@@ -114,13 +115,13 @@ export default function HotspotEntry() {
                     Gateway Status
                   </p>
                   <p className="text-[9px] text-[#655F75]">
-                    Live connection and payment checks are unavailable in this preview.
+                    {demoDataEnabled ? 'Live connection and payment checks are unavailable in this preview.' : 'Gateway status is currently unavailable.'}
                   </p>
                 </div>
               </div>
 
               <span className="shrink-0 rounded-full bg-[#EAE8E3] px-2 py-1 text-[8px] font-semibold text-[#655F75]">
-                PREVIEW
+                {demoDataEnabled ? 'PREVIEW' : 'UNAVAILABLE'}
               </span>
             </div>
 
@@ -183,7 +184,7 @@ export default function HotspotEntry() {
 
             <span className="flex items-center gap-1">
               <ShieldCheck size={11} />
-              Payment preview
+              {demoDataEnabled ? 'Payment preview' : 'Payment help'}
             </span>
           </div>
         </div>

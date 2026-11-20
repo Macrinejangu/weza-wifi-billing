@@ -15,7 +15,7 @@ export default function Register() {
       return
     }
 
-    setFeedback({ text: 'Account creation is unavailable in this preview.', error: false })
+    setFeedback({ text: 'Account creation is currently unavailable.', error: false })
   }
 
   return (
