@@ -1,7 +1,10 @@
 import { ArrowRight, Wifi } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
+import { fetchActivePackages } from '../services/api.js'
 
-const packages = [
+const demoPackages = demoDataEnabled ? [
   {
     name: 'Quick Connect',
     price: 10,
@@ -34,9 +37,29 @@ const packages = [
     speed: 'Up to 25 Mbps',
     description: 'More data for sharing across devices.',
   },
-]
+] : []
 
 export default function Packages() {
+  const [packages, setPackages] = useState(demoPackages)
+  const [status, setStatus] = useState(demoDataEnabled ? 'ready' : 'loading')
+
+  useEffect(() => {
+    if (demoDataEnabled) return
+
+    const controller = new AbortController()
+    fetchActivePackages(controller.signal)
+      .then((items) => {
+        if (controller.signal.aborted) return
+        setPackages(items)
+        setStatus('ready')
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStatus('error')
+      })
+
+    return () => controller.abort()
+  }, [])
+
   return (
     <div className="page-content">
       <header className="page-heading">
@@ -45,11 +68,15 @@ export default function Packages() {
         <p>Compare packages by price, data, speed, and duration.</p>
       </header>
 
+      {status === 'loading' && <p role="status">Loading internet packages…</p>}
+      {status === 'error' && <p role="alert">Internet packages could not load. Try again later.</p>}
+      {status === 'ready' && packages.length === 0 && <p role="status">No internet packages are currently available.</p>}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {packages.map((item) => (
           <article
             className={`flex min-w-0 flex-col rounded-2xl border border-[#edece8] bg-white p-5 ${item.popular ? 'border-t-4 border-t-[#726b91]' : ''}`}
-            key={item.name}
+            key={item.id ?? item.name}
           >
             <div className="mb-4 flex items-center justify-between gap-3">
               <span className="text-xs font-semibold">
@@ -67,7 +94,7 @@ export default function Packages() {
             <dl className="grid gap-2 rounded-lg bg-[#f4f3f0] p-3 text-sm">
               <div className="flex flex-wrap justify-between gap-x-4">
                 <dt>Data</dt>
-                <dd className="font-semibold">{item.data}</dd>
+                <dd className="font-semibold">{item.data ?? 'Unavailable'}</dd>
               </div>
               <div className="flex flex-wrap justify-between gap-x-4">
                 <dt>Duration</dt>
@@ -81,21 +108,27 @@ export default function Packages() {
 
             <p className="mb-4 mt-3 flex-1 text-sm text-[#655f75]">{item.description}</p>
 
-            <Link
-              to="/confirm-package"
-              state={{ selectedPackage: item }}
-              className="package-button text-center"
-            >
-              Choose {item.name}
-              <ArrowRight size={17} className="shrink-0" aria-hidden="true" />
-            </Link>
+            {demoDataEnabled && (
+              <Link
+                to="/confirm-package"
+                state={{ selectedPackage: item }}
+                className="package-button text-center"
+              >
+                Choose {item.name}
+                <ArrowRight size={17} className="shrink-0" aria-hidden="true" />
+              </Link>
+            )}
           </article>
         ))}
       </div>
 
-      <p className="mt-5 text-sm text-[#655f75]">
-        Sample packages. Prices and specifications are pending confirmation.
-      </p>
+      {demoDataEnabled ? (
+        <p className="mt-5 text-sm text-[#655f75]">
+          Sample packages. Prices and specifications are pending confirmation.
+        </p>
+      ) : (
+        <p className="mt-5 text-sm text-[#655f75]">Live checkout is currently unavailable.</p>
+      )}
     </div>
   )
 }

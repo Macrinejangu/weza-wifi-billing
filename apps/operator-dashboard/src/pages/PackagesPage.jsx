@@ -1,69 +1,78 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import '../styles/packages.css'
 
-const initialPackages = [
+const demoPackages = [
   {
     id: 'PKG-001',
-    name: '1-Hour Quick Connect',
-    speed: '5 Mbps',
-    quota: 'Unlimited',
-    price: 20,
-    duration: '1 hour',
-    category: 'passes',
+    name: 'Quick Connect',
+    speed: '5 Mbps / 2 Mbps',
+    quota: '500 MB limit',
+    price: 10,
+    duration: '1 Hour',
+    category: 'Hotspot Captive',
     status: 'Active',
-    badge: '',
+    icon: 'bolt',
   },
   {
     id: 'PKG-002',
-    name: '24-Hour Day Pass',
-    speed: '8 Mbps',
-    quota: 'Unlimited',
+    name: 'Daily Connect',
+    speed: '5 Mbps / 2 Mbps',
+    quota: '2 GB limit',
     price: 50,
-    duration: '24 hours',
-    category: 'passes',
+    duration: '24 Hours',
+    category: 'Hotspot Captive',
     status: 'Active',
-    badge: 'Popular',
+    icon: 'calendar_today',
   },
   {
     id: 'PKG-003',
-    name: 'Weekly Plus 10GB',
-    speed: '10 Mbps',
-    quota: '10 GB Fair-Use',
+    name: 'Weekly Plus',
+    speed: '10 Mbps / 5 Mbps',
+    quota: '10 GB limit',
     price: 250,
-    duration: '7 days',
-    category: 'term',
+    duration: '7 Days',
+    category: 'Hotspot Captive',
     status: 'Active',
-    badge: 'Top Revenue',
+    icon: 'star',
+    badge: 'Popular',
   },
   {
     id: 'PKG-004',
-    name: 'Monthly FastTrack 50GB',
-    speed: '15 Mbps',
-    quota: '50 GB Fair-Use',
-    price: 900,
-    duration: '30 days',
-    category: 'term',
+    name: 'Unlimited 24h',
+    speed: '5 Mbps uncapped',
+    quota: 'Unlimited',
+    price: 100,
+    duration: '24 Hours',
+    category: 'Hotspot Captive',
     status: 'Active',
-    badge: '',
+    icon: 'all_inclusive',
   },
   {
     id: 'PKG-005',
-    name: 'Night Owl Unlimited',
-    speed: '12 Mbps',
-    quota: 'Unlimited (22:00 - 06:00)',
-    price: 35,
-    duration: '8 hours',
-    category: 'passes',
+    name: 'Monthly Max',
+    speed: '10 Mbps / 5 Mbps',
+    quota: '40 GB limit',
+    price: 900,
+    duration: '30 Days',
+    category: 'Home Fiber',
     status: 'Active',
-    badge: 'Off-Peak',
+    icon: 'calendar_month',
+  },
+  {
+    id: 'PKG-006',
+    name: 'Night Owl 12h',
+    speed: '8 Mbps / 4 Mbps',
+    quota: 'Unlimited',
+    price: 30,
+    duration: '12 Hours (Off-peak)',
+    category: 'Hotspot Captive',
+    status: 'Inactive',
+    icon: 'dark_mode',
   },
 ]
 
-const filterOptions = [
-  { label: 'All Tiers', value: 'all' },
-  { label: 'Hourly / Passes', value: 'passes' },
-  { label: 'Weekly / Monthly', value: 'term' },
-]
+const packageTypes = ['Hotspot Captive', 'Home Fiber']
+const statuses = ['Active', 'Inactive']
 
 function PackageDialog({ packageItem, onClose, onSave }) {
   const [name, setName] = useState(packageItem?.name ?? '')
@@ -71,12 +80,33 @@ function PackageDialog({ packageItem, onClose, onSave }) {
   const [quota, setQuota] = useState(packageItem?.quota ?? 'Unlimited')
   const [price, setPrice] = useState(String(packageItem?.price ?? ''))
   const [duration, setDuration] = useState(packageItem?.duration ?? '1 hour')
-  const [category, setCategory] = useState(packageItem?.category ?? 'passes')
+  const [category, setCategory] = useState(packageItem?.category ?? packageTypes[0])
+
+  const dialogRef = useRef(null)
+  const nameRef = useRef(null)
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    dialog.showModal()
+    nameRef.current.focus()
+    return () => dialog.close()
+  }, [])
 
   function submit(event) {
     event.preventDefault()
+    const form = event.currentTarget
+    for (const field of form.querySelectorAll('input[required]')) {
+      if (!field.value.trim() && field.type === 'text') {
+        field.setCustomValidity('Enter a value other than spaces.')
+      }
+      if (field.name === 'price' && !Number.isSafeInteger(field.valueAsNumber)) {
+        field.setCustomValidity('Enter a positive whole amount in KES.')
+      }
+    }
+    if (!form.reportValidity()) return
+
     onSave({
-      id: packageItem?.id ?? `DEMO-${Date.now().toString().slice(-6)}`,
+      id: packageItem?.id ?? `DEMO-${crypto.randomUUID()}`,
       name: name.trim(),
       speed: speed.trim(),
       quota: quota.trim(),
@@ -84,124 +114,158 @@ function PackageDialog({ packageItem, onClose, onSave }) {
       duration: duration.trim(),
       category,
       status: packageItem?.status ?? 'Active',
-      badge: packageItem?.badge ?? '',
+      badge: packageItem?.badge,
+      icon: packageItem?.icon ?? 'wifi',
     })
   }
 
-  return (
-    <div className="package-modal-backdrop" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose()
-    }}>
-      <section className="package-modal" role="dialog" aria-modal="true" aria-labelledby="package-dialog-title">
-        <div className="package-modal-heading">
-          <div>
-            <p className="eyebrow">PACKAGE CONFIGURATION</p>
-            <h2 id="package-dialog-title">{packageItem ? 'Edit package' : 'Create package'}</h2>
-          </div>
-          <button type="button" className="package-modal-close" aria-label="Close dialog" onClick={onClose}>×</button>
-        </div>
+  function dismissBackdrop(event) {
+    if (event.target !== event.currentTarget) return
+    const { left, right, top, bottom } = event.currentTarget.getBoundingClientRect()
+    if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) {
+      onClose()
+    }
+  }
 
-        <form className="package-form" onSubmit={submit}>
+  return (
+    <dialog
+      ref={dialogRef}
+      className="package-modal"
+      aria-labelledby="package-dialog-title"
+      aria-describedby="package-dialog-note"
+      onClick={dismissBackdrop}
+      onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+    >
+      <div className="package-modal-heading">
+        <div>
+          <p className="eyebrow">PACKAGE CONFIGURATION</p>
+          <h2 id="package-dialog-title">{packageItem ? 'Edit package' : 'Create package'}</h2>
+        </div>
+        <button type="button" className="package-modal-close" aria-label="Close dialog" onClick={onClose}>×</button>
+      </div>
+
+      <form className="package-form" onSubmit={submit} onInput={(event) => {
+        if (event.target instanceof HTMLInputElement) event.target.setCustomValidity('')
+      }}>
+        <label>
+          Package name
+          <input ref={nameRef} type="text" value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} />
+        </label>
+        <div className="package-form-grid">
           <label>
-            Package name
-            <input value={name} onChange={(event) => setName(event.target.value)} required maxLength={60} />
+            Download / upload speed
+            <input type="text" value={speed} onChange={(event) => setSpeed(event.target.value)} required maxLength={60} />
           </label>
-          <div className="package-form-grid">
-            <label>
-              Speed
-              <input value={speed} onChange={(event) => setSpeed(event.target.value)} required />
-            </label>
-            <label>
-              Data allowance
-              <input value={quota} onChange={(event) => setQuota(event.target.value)} required />
-            </label>
-            <label>
-              Price (KES)
-              <input type="number" min="1" step="1" value={price} onChange={(event) => setPrice(event.target.value)} required />
-            </label>
-            <label>
-              Duration
-              <input value={duration} onChange={(event) => setDuration(event.target.value)} required />
-            </label>
-          </div>
           <label>
-            Package category
-            <select value={category} onChange={(event) => setCategory(event.target.value)}>
-              <option value="passes">Hourly / Passes</option>
-              <option value="term">Weekly / Monthly</option>
-            </select>
+            Data allowance
+            <input type="text" value={quota} onChange={(event) => setQuota(event.target.value)} required maxLength={60} />
           </label>
-          <div className="package-form-actions">
-            <button type="button" className="package-secondary-button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="package-primary-button">{packageItem ? 'Save changes' : 'Create package'}</button>
+          <label>
+            Price (KES)
+            <input type="number" name="price" min="1" step="1" value={price} onChange={(event) => setPrice(event.target.value)} required />
+          </label>
+          <label>
+            Duration
+            <input type="text" value={duration} onChange={(event) => setDuration(event.target.value)} required maxLength={60} />
+          </label>
+        </div>
+        <label>
+          Package type
+          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+            {packageTypes.map((type) => <option key={type}>{type}</option>)}
+          </select>
+        </label>
+        <div className="package-form-actions">
+          <button type="button" className="package-secondary-button" onClick={onClose}>Cancel</button>
+          <button type="submit" className="package-primary-button">{packageItem ? 'Save changes' : 'Create package'}</button>
+        </div>
+      </form>
+      <p className="package-modal-note" id="package-dialog-note">Demo configuration only. Changes are held in this page and are not saved to a server.</p>
+    </dialog>
+  )
+}
+
+function PackageRow({ item, onEdit }) {
+  const inactive = item.status === 'Inactive'
+  return (
+    <tr className={inactive ? 'package-row-inactive' : undefined}>
+      <th scope="row">
+        <div className="package-name">
+          <span className={`package-icon material-symbols-outlined${item.badge ? ' featured' : ''}`} aria-hidden="true">{item.icon}</span>
+          <div>
+            <strong>{item.name}</strong>
+            <span className="package-type">{item.category}</span>
           </div>
-        </form>
-        <p className="package-modal-note">Demo configuration only. Changes are held in this page and are not saved to a server.</p>
-      </section>
+          {item.badge && <span className="package-badge">{item.badge}</span>}
+        </div>
+      </th>
+      <td className="package-price">KES<br />{item.price.toLocaleString('en-KE')}</td>
+      <td><div className="package-speed"><span className="material-symbols-outlined" aria-hidden="true">speed</span>{item.speed}</div></td>
+      <td>{item.duration}</td>
+      <td><span className={`package-quota${item.quota === 'Unlimited' && !inactive ? ' unlimited' : ''}`}>{item.quota}</span></td>
+      <td><span className={`package-status${inactive ? ' inactive' : ''}`}>{item.status}</span></td>
+      <td className="package-actions">
+        <button type="button" className="package-edit-button" aria-label={`Edit package: ${item.name}`} onClick={(event) => onEdit(item, event.currentTarget)}>Edit</button>
+      </td>
+    </tr>
+  )
+}
+
+function PackageFilters({ label, options, selected, onSelect }) {
+  return (
+    <div className="package-filters" role="group" aria-label={label}>
+      {options.map(({ value, text }) => (
+        <button key={value} type="button" aria-pressed={selected === value} onClick={() => onSelect(value)}>
+          {text}
+        </button>
+      ))}
     </div>
   )
 }
 
-function PackageCard({ packageItem, onEdit }) {
-  return (
-    <article className="package-card">
-      <div className="package-card-heading">
-        <div>
-          <span className="package-card-category">{packageItem.category === 'passes' ? 'QUICK ACCESS' : 'SUBSCRIPTION TIER'}</span>
-          <h3>{packageItem.name}</h3>
-        </div>
-        <span className={`package-status ${packageItem.status.toLowerCase()}`}>
-          <span />
-          {packageItem.status}
-        </span>
-      </div>
-
-      <div className="package-price-row">
-        <div className="package-price">
-          <span>KES</span>
-          <strong>{packageItem.price.toLocaleString('en-KE')}</strong>
-        </div>
-        {packageItem.badge && <span className="package-highlight">{packageItem.badge}</span>}
-      </div>
-
-      <div className="package-specifications">
-        <div>
-          <span className="material-symbols-outlined">speed</span>
-          <span><small>Speed</small><strong>{packageItem.speed} Burst</strong></span>
-        </div>
-        <div>
-          <span className="material-symbols-outlined">data_usage</span>
-          <span><small>Data allowance</small><strong>{packageItem.quota}</strong></span>
-        </div>
-        <div>
-          <span className="material-symbols-outlined">schedule</span>
-          <span><small>Validity</small><strong>{packageItem.duration}</strong></span>
-        </div>
-      </div>
-
-      <div className="package-card-footer">
-        <span className="package-demo-label">Demo package</span>
-        <button type="button" className="package-edit-button" onClick={() => onEdit(packageItem)}>
-          Edit package
-          <span className="material-symbols-outlined">arrow_forward</span>
-        </button>
-      </div>
-    </article>
-  )
-}
-
 export default function PackagesPage() {
-  const [packages, setPackages] = useState(initialPackages)
-  const [activeFilter, setActiveFilter] = useState('all')
-  const [editingPackage, setEditingPackage] = useState(null)
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [packages, setPackages] = useState(demoPackages)
+  const [status, setStatus] = useState('all')
+  const [type, setType] = useState('all')
+  const [query, setQuery] = useState('')
+  const [dialog, setDialog] = useState(null)
+  const searchRef = useRef(null)
+  const triggerRef = useRef(null)
 
-  const visiblePackages = useMemo(
-    () => activeFilter === 'all'
-      ? packages
-      : packages.filter((item) => item.category === activeFilter),
-    [packages, activeFilter]
+  const search = query.trim().toLowerCase()
+  const activeCount = packages.filter((item) => item.status === 'Active').length
+  const statusOptions = [
+    { value: 'all', text: `All (${packages.length})` },
+    ...statuses.map((value) => ({
+      value,
+      text: `${value} (${value === 'Active' ? activeCount : packages.length - activeCount})`,
+    })),
+  ]
+  const typeOptions = [{ value: 'all', text: 'All Types' }, ...packageTypes.map((value) => ({ value, text: value }))]
+  const visiblePackages = packages.filter((item) =>
+    (status === 'all' || item.status === status)
+    && (type === 'all' || item.category === type)
+    && [item.name, item.id, item.speed, `KES ${item.price}`].some((value) => value.toLowerCase().includes(search))
   )
+
+  function openDialog(packageItem, trigger) {
+    triggerRef.current = trigger
+    setDialog({ packageItem })
+  }
+
+  function closeDialog() {
+    setDialog(null)
+  }
+
+  useEffect(() => {
+    if (dialog || !triggerRef.current) return
+    const target = triggerRef.current.isConnected ? triggerRef.current : searchRef.current
+    target.focus()
+    triggerRef.current = null
+  }, [dialog])
 
   function savePackage(packageItem) {
     setPackages((current) => {
@@ -210,88 +274,72 @@ export default function PackagesPage() {
         ? current.map((item) => item.id === packageItem.id ? packageItem : item)
         : [...current, packageItem]
     })
-    setEditingPackage(null)
-    setShowCreateDialog(false)
+    closeDialog()
   }
 
   return (
-    <main className="packages-page">
-      <div className="page-heading packages-heading">
+    <div className="packages-page">
+      <header className="page-heading packages-heading">
         <div>
-          <p className="eyebrow">TARIFF ARCHITECTURE</p>
-          <h1>Internet Packages</h1>
-          <p className="page-description">Manage the plans available to subscribers on your network.</p>
+          <div className="package-title"><h1>Packages</h1><span>Tariff Engine</span></div>
+          <p className="page-description">Create and manage available internet packages, captive tiers, and rate limit quotas.</p>
         </div>
-        <button type="button" className="package-primary-button package-create-button" onClick={() => setShowCreateDialog(true)}>
-          <span className="material-symbols-outlined">add</span>
-          New Package
+        <button type="button" className="package-primary-button package-create-button" onClick={(event) => openDialog(null, event.currentTarget)}>
+          <span className="material-symbols-outlined" aria-hidden="true">add</span>
+          Add Package
         </button>
-      </div>
+      </header>
 
-      <div className="package-overview">
-        <div className="package-overview-card">
-          <span className="package-overview-icon material-symbols-outlined">inventory_2</span>
-          <div><strong>{packages.length}</strong><span>Configured packages</span></div>
+      <div className="package-toolbar">
+        <div className="package-filter-stack">
+          <div className="package-filter-line">
+            <span className="package-active-count">{activeCount} Active {activeCount === 1 ? 'Package' : 'Packages'}</span>
+            <PackageFilters label="Filter packages by status" options={statusOptions} selected={status} onSelect={setStatus} />
+          </div>
+          <PackageFilters label="Filter packages by type" options={typeOptions} selected={type} onSelect={setType} />
         </div>
-        <div className="package-overview-card">
-          <span className="package-overview-icon material-symbols-outlined">check_circle</span>
-          <div><strong>{packages.filter((item) => item.status === 'Active').length}</strong><span>Active packages</span></div>
-        </div>
-        <div className="package-overview-card">
-          <span className="package-overview-icon material-symbols-outlined">payments</span>
-          <div><strong>KES {Math.max(...packages.map((item) => item.price)).toLocaleString('en-KE')}</strong><span>Highest package price</span></div>
-        </div>
+        <label className="package-search">
+          <span className="material-symbols-outlined" aria-hidden="true">search</span>
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search packages"
+            placeholder="Search packages by name, speed, or price"
+            value={query}
+            onChange={(event) => setQuery(event.currentTarget.value)}
+          />
+        </label>
       </div>
 
       <section className="package-catalogue" aria-label="Internet package catalogue">
-        <div className="package-catalogue-heading">
-          <div>
-            <h2>Package catalogue</h2>
-            <p>Select a package to review or update its configuration.</p>
-          </div>
-          <span className="package-catalogue-count">{visiblePackages.length} packages</span>
+        <div className="package-table-scroll" role="region" aria-label="Scrollable packages table" tabIndex={0}>
+          <table className="package-table" aria-label="Internet packages">
+            <thead>
+              <tr>
+                <th scope="col">Package name</th>
+                <th scope="col">Price (KES)</th>
+                <th scope="col">Download / upload speed</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Data allowance</th>
+                <th scope="col">Status</th>
+                <th scope="col" className="package-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiblePackages.map((item) => <PackageRow key={item.id} item={item} onEdit={openDialog} />)}
+              {visiblePackages.length === 0 && <tr><td colSpan={7} className="package-empty">No matching packages. Try another search or filter.</td></tr>}
+            </tbody>
+          </table>
         </div>
-
-        <div className="package-filters" role="group" aria-label="Filter packages">
-          {filterOptions.map((filter) => {
-            const count = filter.value === 'all'
-              ? packages.length
-              : packages.filter((item) => item.category === filter.value).length
-
-            return (
-              <button
-                key={filter.value}
-                type="button"
-                className={`package-filter ${activeFilter === filter.value ? 'active' : ''}`}
-                aria-pressed={activeFilter === filter.value}
-                onClick={() => setActiveFilter(filter.value)}
-              >
-                {filter.label}
-                <span>{count}</span>
-              </button>
-            )
-          })}
-        </div>
-
-        <div className="package-grid">
-          {visiblePackages.map((item) => (
-            <PackageCard key={item.id} packageItem={item} onEdit={setEditingPackage} />
-          ))}
-        </div>
-
-        <p className="package-data-notice">Illustrative package data for frontend review. No live billing or network configuration is connected.</p>
+        <footer className="package-table-footer">
+          <span role="status">Showing {visiblePackages.length} of {packages.length} packages</span>
+          <span>Demo data · Changes are temporary</span>
+        </footer>
       </section>
 
-      {(showCreateDialog || editingPackage) && (
-        <PackageDialog
-          packageItem={editingPackage}
-          onClose={() => {
-            setShowCreateDialog(false)
-            setEditingPackage(null)
-          }}
-          onSave={savePackage}
-        />
+      {dialog && (
+        <PackageDialog packageItem={dialog.packageItem} onClose={closeDialog} onSave={savePackage} />
       )}
-    </main>
+    </div>
   )
 }
