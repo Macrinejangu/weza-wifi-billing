@@ -2,7 +2,7 @@ const navigationItems = [
   { id: 'overview', label: 'Overview', icon: 'dashboard', enabled: true },
   { id: 'customers', label: 'Customers', icon: 'group', enabled: true },
   { id: 'packages', label: 'Packages', icon: 'inventory_2', enabled: true },
-  { id: 'payments', label: 'Payments', icon: 'payments', enabled: true },
+  { id: 'payments', label: 'Payments', icon: 'payments' },
   { id: 'sessions', label: 'Sessions', icon: 'wifi', enabled: true },
   { id: 'connection-issues', label: 'Connection Issues', icon: 'warning', badge: '3' },
   { id: 'network-devices', label: 'Network & Devices', icon: 'router' },
@@ -26,7 +26,6 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator, activePage 
 
       <nav className="sidebar-navigation" aria-label="Main navigation">
         <p className="navigation-label">WORKSPACE</p>
-
         {navigationItems.map((item) => (
           <button
             key={item.label}
@@ -40,12 +39,10 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator, activePage 
             disabled={!item.enabled}
             title={item.enabled ? undefined : 'Unavailable in this preview'}
           >
-            <span className="material-symbols-outlined">
+            <span className="material-symbols-outlined" aria-hidden="true">
               {item.icon}
             </span>
-
             <span className="navigation-text">{item.label}</span>
-
             {item.badge && (
               <span className="navigation-badge">{item.badge}</span>
             )}

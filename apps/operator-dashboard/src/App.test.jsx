@@ -1,13 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import App from './App.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
-import PaymentsPage from './pages/PaymentsPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
+
+vi.hoisted(() => {
+  vi.stubEnv('DEV', true)
+  vi.stubEnv('VITE_USE_DEMO_DATA', 'true')
+})
 
 test('renders the operator dashboard shell', () => {
   const html = renderToStaticMarkup(<DashboardLayout operator={developmentOperator}><DashboardPage operator={developmentOperator} /></DashboardLayout>)
@@ -117,7 +121,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(3)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(4)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -126,96 +130,69 @@ test('renders the customer directory with illustrative summary data', () => {
   const html = renderToStaticMarkup(<CustomersPage />)
 
   expect(html).toContain('Customers')
-  expect(html).toContain('1,842')
-  expect(html).toContain('1,429')
-  expect(html).toContain('341')
-  expect(html).toContain('72')
-  expect(html).toContain('94.2%')
+  expect(html).toContain('Total Registered')
+  expect(html).toContain('<strong>10</strong>')
+  expect(html).toContain('Active Online')
+  expect(html).toContain('<strong>4</strong>')
+  expect(html).toContain('Suspended / Inactive')
+  expect(html).toContain('<strong>2</strong>')
+  expect((html.match(/scope="col"/g) ?? []).length).toBe(7)
+  expect((html.match(/scope="row"/g) ?? []).length).toBe(7)
   expect(html).toContain('Illustrative demo data')
   expect(html).toContain('Amina Wanjiku')
   expect(html).toContain('Dennis Kiprono')
   expect(html).toContain('Faith Mwangi')
   expect(html).toContain('Brian Otieno')
   expect(html).toContain('Esther Njeri')
-  expect(html).not.toContain('Kevin Mutua')
+  expect(html).toContain('Grace Achieng')
+  expect(html).not.toContain('Samuel Kariuki')
 })
 
 test('renders customer search, status filters, registration and pagination controls', () => {
   const html = renderToStaticMarkup(<CustomersPage />)
 
   expect(html).toContain('Search customers')
-  expect(html).toContain('Search by name, phone number or customer ID')
+  expect(html).toContain('Search name, phone or customer ID')
   expect(html).toContain('aria-label="Filter customers by status"')
   expect(html).toContain('aria-pressed="true"')
   expect(html).toContain('Active')
   expect(html).toContain('Expired')
   expect(html).toContain('Flagged')
-  expect(html).toContain('Add customer')
-  expect(html).toContain('View profile')
-  expect(html).toContain('Showing 1–5 of 10 sample records')
+  expect(html).toContain('Register customer')
+  expect(html).toContain('View profile for Amina Wanjiku')
+  expect(html).toContain('Filter by package')
+  expect(html).toContain('Showing 1–7 of 10 sample records')
   expect(html).toContain('aria-label="Previous page"')
   expect(html).toContain('aria-label="Next page"')
   expect(html).toContain('1 / 2')
 })
 
 
-test('renders the five supplied internet packages', () => {
+test('renders the six demo internet packages', () => {
   const html = renderToStaticMarkup(<PackagesPage />)
 
-  expect(html).toContain('Internet Packages')
-  expect(html).toContain('1-Hour Quick Connect')
-  expect(html).toContain('24-Hour Day Pass')
-  expect(html).toContain('Weekly Plus 10GB')
-  expect(html).toContain('Monthly FastTrack 50GB')
-  expect(html).toContain('Night Owl Unlimited')
-  expect(html).toContain('KES 900')
-  expect(html).toContain('New Package')
-  expect(html).toContain('Illustrative package data')
+  expect(html).toContain('>Packages</h1>')
+  expect(html).toContain('Quick Connect')
+  expect(html).toContain('Daily Connect')
+  expect(html).toContain('Weekly Plus')
+  expect(html).toContain('Monthly Max')
+  expect(html).toContain('Night Owl 12h')
+  expect(html).toContain('Unlimited 24h')
+  expect(html).toContain('Add Package')
+  expect(html).toContain('Demo data')
 })
 
-test('renders package filters with the correct category counts', () => {
+test('renders package status and type filters with counts derived from the demo rows', () => {
   const html = renderToStaticMarkup(<PackagesPage />)
 
-  expect(html).toContain('All Tiers')
-  expect(html).toContain('Hourly / Passes')
-  expect(html).toContain('Weekly / Monthly')
-  expect(html).toContain('aria-label="Filter packages"')
-  expect(html).toContain('>5</span>')
-  expect(html).toContain('>3</span>')
-  expect(html).toContain('>2</span>')
+  expect(html).toContain('Filter packages by status')
+  expect(html).toContain('Filter packages by type')
+  expect(html).toContain('All (6)')
+  expect(html).toContain('Active (5)')
+  expect(html).toContain('Inactive (1)')
+  expect(html).toContain('Hotspot Captive')
+  expect(html).toContain('Home Fiber')
 })
-
-
-test('renders payment monitoring KPIs and illustrative transactions', () => {
-  const html = renderToStaticMarkup(<PaymentsPage />)
-
-  expect(html).toContain('Payments &amp; Vouchers')
-  expect(html).toContain('KES 84,250')
-  expect(html).toContain('98.2%')
-  expect(html).toContain('612 processed')
-  expect(html).toContain('Dennis Kiprono')
-  expect(html).toContain('Amina Wanjiku')
-  expect(html).toContain('Grace Mwangi')
-  expect(html).toContain('RJ92MN41P0')
-  expect(html).toContain('DEMO MODE')
-  expect(html).toContain('NOT CONNECTED')
-  expect(html).toContain('Illustrative payment records')
-})
-
-test('renders payment search, status filters and inspection controls', () => {
-  const html = renderToStaticMarkup(<PaymentsPage />)
-
-  expect(html).toContain('Search payments')
-  expect(html).toContain('Search customer, phone, or receipt')
-  expect(html).toContain('Filter payments by status')
-  expect(html).toContain('All transactions')
-  expect(html).toContain('Confirmed')
-  expect(html).toContain('Pending')
-  expect(html).toContain('Inspect')
-  expect(html).toContain('Today')
-  expect(html).toContain('EAT (UTC+3)')
-})
-
 
 test('renders active session monitoring with illustrative KPI data', () => {
   const html = renderToStaticMarkup(<SessionsPage />)
@@ -223,8 +200,11 @@ test('renders active session monitoring with illustrative KPI data', () => {
   expect(html).toContain('Active Sessions')
   expect(html).toContain('DEMO MODE')
   expect(html).toContain('NOT CONNECTED')
-  expect(html).toContain('1.42 Gbps')
-  expect(html).toContain('99.8%')
+  expect(html).toContain('Expiring Soon')
+  expect(html).toContain('Failed Activations')
+  expect(html).toContain('<strong>1,248</strong>')
+  expect(html).toContain('<strong>18</strong>')
+  expect(html).toContain('<strong>2</strong>')
   expect(html).toContain('Amina Wanjiku')
   expect(html).toContain('John Kariuki')
   expect(html).toContain('Brenda Mutua')
@@ -239,6 +219,10 @@ test('renders session search, filters and inspection controls', () => {
   expect(html).toContain('Search sessions')
   expect(html).toContain('Voucher')
   expect(html).toContain('Monthly / SME')
-  expect(html).toContain('View Details')
+  expect(html).toContain('Active Authentications')
+  expect(html).toContain('Connection status')
+  expect(html).toContain('Expiry time')
+  expect(html).toContain('Fixed snapshot')
+  expect(html).toContain('aria-label="Inspect session for Amina Wanjiku"')
   expect(html).toContain('Page 1 of 1')
 })
