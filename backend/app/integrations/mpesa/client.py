@@ -29,9 +29,12 @@ from app.integrations.mpesa.errors import (
     DarajaUnavailableError,
 )
 from app.integrations.mpesa.stk_body import build_stk_push_body
-from app.payments.daraja_password import daraja_timestamp
+from app.integrations.mpesa.stk_query import StkQueryResult, interpret_stk_query_response
+from app.payments.daraja_password import build_password, daraja_timestamp
 from app.integrations.mpesa.token_cache import TokenCache
 from dataclasses import dataclass
+
+
 
 
 logger = logging.getLogger(__name__)
@@ -52,6 +55,12 @@ STK_PUSH_PATH = "/mpesa/stkpush/v1/processrequest"
 # One attempt only. An STK Push is never retried: a repeat could put a second
 # prompt on the customer's phone.
 STK_PUSH_TIMEOUT_SECONDS = 10.0
+
+STK_QUERY_PATH = "/mpesa/stkpushquery/v1/query"
+
+# One attempt per call. A query is safe to repeat, but the CALLER decides when
+# to ask again (the polling job), so the client can never hammer Daraja.
+STK_QUERY_TIMEOUT_SECONDS = 10.0
 
 # Daraja's text fields are untrusted: keep only short strings for logs.
 _MAX_LOGGED_TEXT = 100
@@ -297,3 +306,86 @@ class DarajaClient:
             checkout_request_id=checkout_id,
             merchant_request_id=merchant_id,
         )
+
+
+    def stk_query(
+        self, checkout_request_id: str, timestamp: str | None = None
+    ) -> StkQueryResult:
+        """Ask Daraja what happened to a payment. Sends ONE request.
+
+        Returns an StkQueryResult (PAID, FAILED or UNKNOWN). Raises ValueError
+        for an empty ID (nothing is sent). Otherwise:
+          * DarajaAuthError: no token, so no query was sent.
+          * DarajaRejectedError, DarajaTimeoutError, DarajaUnavailableError:
+            the query did not give an answer.
+
+        Every DarajaError means "we still do not know": the caller must keep
+        the payment pending. Only StkQueryOutcome.FAILED means it failed.
+
+        `timestamp` exists for tests. Normally it is generated after the token
+        is obtained, because token retries can take many seconds.
+        """
+        # Validate first, so our own bug never costs a token request.
+        if not isinstance(checkout_request_id, str) or not checkout_request_id:
+            raise ValueError("checkout_request_id must be a non-empty string")
+
+        try:
+            token = self.get_access_token()
+        except DarajaError as error:
+            raise DarajaAuthError("Could not obtain an access token; no query was sent.") from error
+
+        stamp = timestamp if timestamp is not None else daraja_timestamp()
+        body = {
+            "BusinessShortCode": self._settings.shortcode,
+            "Password": build_password(
+                self._settings.shortcode, self._settings.passkey, stamp
+            ),
+            "Timestamp": stamp,
+            "CheckoutRequestID": checkout_request_id,
+        }
+        try:
+            response = self._http.post(
+                f"{SANDBOX_BASE_URL}{STK_QUERY_PATH}",
+                json=body,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=STK_QUERY_TIMEOUT_SECONDS,
+            )
+        except httpx.TimeoutException:
+            raise DarajaTimeoutError("Daraja STK Query timed out.") from None
+        except httpx.TransportError:
+            raise DarajaUnavailableError("Could not complete the STK Query request.") from None
+
+        return self._handle_stk_query_response(response, checkout_request_id)
+
+
+    def _handle_stk_query_response(self, response: httpx.Response, checkout_request_id: str) -> StkQueryResult:
+        """Turn an HTTP reply into an StkQueryResult, or raise a DarajaError."""
+        status = response.status_code
+        if status >= 500:
+            # Includes Daraja's "still being processed" reply: not an answer.
+            raise DarajaUnavailableError(f"Daraja returned HTTP {status} for the query.")
+
+        try:
+            body = response.json()
+        except ValueError:
+            body = None
+
+        if status != 200:
+            if status in (401, 403):
+                self.invalidate_token()
+            error_body = body if isinstance(body, dict) else {}
+            raise DarajaRejectedError(
+                f"Daraja refused the STK Query (HTTP {status}).",
+                http_status=status,
+                error_code=_safe_text(error_body.get("errorCode")),
+                request_id=_safe_text(error_body.get("requestId")),
+            )
+
+        # A 200 with a broken body is handled by the interpreter: UNKNOWN.
+        result = interpret_stk_query_response(body, checkout_request_id)
+        logger.info(
+            "STK Query: checkout_request_id=%s outcome=%s",
+            checkout_request_id,
+            result.outcome.value,
+        )
+        return result
