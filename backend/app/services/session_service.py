@@ -4,55 +4,114 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from app.models import ActivationAttempt, Payment, WiFiSession
-from app.services.mock_router import activate_wifi_session
+from app.services.access_auth import activate_access_device
 
 
-def create_session(db: Session, payment_id: int, mac: str | None = None, ip: str | None = None) -> WiFiSession:
+def create_session(
+    db: Session,
+    payment_id: int,
+    mac: str | None = None,
+    ip: str | None = None,
+) -> WiFiSession:
     """One session per payment, and only for a payment M-Pesa confirmed."""
     payment = db.get(Payment, payment_id, with_for_update=True)
+
     if payment is None:
         raise LookupError("Payment not found")
+
     if payment.status != "successful":
         raise ValueError("Payment has not been confirmed")
+
     session = db.query(WiFiSession).filter_by(payment_id=payment.id).first()
+
     if session is None:
         session = WiFiSession(
-            user_id=payment.purchase.user_id, package_id=payment.purchase.package_id, payment_id=payment.id,
-            device_mac_address=mac, device_ip_address=ip, status="PAYMENT_CONFIRMED",
+            user_id=payment.purchase.user_id,
+            package_id=payment.purchase.package_id,
+            payment_id=payment.id,
+            device_mac_address=mac,
+            device_ip_address=ip,
+            status="PAYMENT_CONFIRMED",
         )
         db.add(session)
+
     db.commit()
     return session
 
 
-def activate_session(db: Session, session_id: int, router: Callable[[int], dict] = activate_wifi_session) -> WiFiSession:
-    """Ask the router to switch access on. The timer starts only if the router confirms."""
+def activate_session(
+    db: Session,
+    session_id: int,
+    router: Callable[[int], dict] | None = None,
+) -> WiFiSession:
+    """
+    Activate the purchased access service.
+
+    The session timer starts only after the selected access provider
+    confirms successful activation.
+    """
     session = db.get(WiFiSession, session_id, with_for_update=True)
+
     if session is None:
         raise LookupError("Session not found")
+
     if session.activation_status == "succeeded":
-        return session  # already active
+        return session
+
     if session.status not in ("PAYMENT_CONFIRMED", "FAILED"):
         raise ValueError(f"Cannot activate a session that is {session.status}")
 
+    purchase = session.payment.purchase
+
     now = datetime.now(timezone.utc)
-    attempt = ActivationAttempt(session_id=session.id, attempt_number=len(session.attempts) + 1)
-    session.status, session.activation_status = "ACTIVATING", "waiting"
-    session.activation_requested_at, session.failure_reason = now, None
+    attempt = ActivationAttempt(
+        session_id=session.id,
+        attempt_number=len(session.attempts) + 1,
+    )
+
+    session.status = "ACTIVATING"
+    session.activation_status = "waiting"
+    session.activation_requested_at = now
+    session.failure_reason = None
+
     db.add(attempt)
     db.flush()
 
     try:
-        if router(session.id).get("status") != "ACTIVE":
+        if router is not None:
+            # Preserve the existing test and custom-router callback contract.
+            result = router(session.id)
+        else:
+            result = activate_access_device(
+                mac_address=session.device_mac_address,
+                ip_address=session.device_ip_address,
+                download_speed_mbps=purchase.download_speed_mbps,
+                upload_speed_mbps=purchase.upload_speed_mbps,
+            )
+
+        if result.get("status") != "ACTIVE":
             raise RuntimeError("Router did not confirm activation")
-    except Exception as error:  # the customer's paid time is untouched: no timer was started
-        attempt.status, attempt.error_code, attempt.error_message = "failed", type(error).__name__, str(error)[:255]
-        session.status, session.activation_status, session.failure_reason = "FAILED", "failed", str(error)[:255]
+
+    except Exception as error:
+        attempt.status = "failed"
+        attempt.error_code = type(error).__name__
+        attempt.error_message = str(error)[:255]
+
+        session.status = "FAILED"
+        session.activation_status = "failed"
+        session.failure_reason = str(error)[:255]
+
     else:
         attempt.status = "succeeded"
-        session.status, session.activation_status = "ACTIVE", "succeeded"
+
+        session.status = "ACTIVE"
+        session.activation_status = "succeeded"
         session.started_at = datetime.now(timezone.utc)
-        session.expires_at = session.started_at + timedelta(minutes=session.payment.purchase.duration_minutes)
+        session.expires_at = session.started_at + timedelta(
+            minutes=purchase.duration_minutes
+        )
+
     attempt.completed_at = datetime.now(timezone.utc)
+
     db.commit()
     return session
