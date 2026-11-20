@@ -106,6 +106,14 @@ def test_parse_phone_rejects_everything_else(raw):
     assert "254208374149" not in str(info.value)
 
 
+def test_parse_phone_error_does_not_leak_the_number():
+    # Exception messages end up in logs, and full phone numbers must never be
+    # logged. This proves the error text never contains the rejected value.
+    with pytest.raises(MalformedCallbackError) as info:
+        parse_phone("254208374149")
+    assert "254208374149" not in str(info.value)
+
+
 
 # ---------- Receipt ----------
 
