@@ -7,6 +7,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
+import ActivityHistoryPage from './pages/ActivityHistoryPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
 import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
@@ -277,4 +278,14 @@ test('renders the demo settings sections and local save control', () => {
   expect(html).toContain('Integration Status')
   expect(html).toContain('Staff Access &amp; Operator Roles')
   expect(html).toContain('Save Changes')
+})
+
+
+test('renders the demo audit log with filters and named event inspection controls', () => {
+  const html = renderToStaticMarkup(<ActivityHistoryPage />)
+
+  expect(html).toContain('Activity &amp; Audit History')
+  expect(html).toContain('Search audit history')
+  expect(html).toContain('Inspect event EVT-89210')
+  expect(html).toContain('Pending Router Response')
 })
