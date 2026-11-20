@@ -1,4 +1,3 @@
-
 import {
   Wifi,
   Radio,
@@ -6,19 +5,16 @@ import {
   UserRound,
   CircleHelp,
   ShieldCheck,
-  Zap
+  Zap,
 } from 'lucide-react'
-
 import { Link } from 'react-router-dom'
 
 export default function HotspotEntry() {
   return (
     <div className="min-h-screen flex flex-col bg-[#F7F6F2]">
-
       {/* Header */}
       <header className="bg-white border-b border-[#F0EEF6]">
         <div className="max-w-7xl mx-auto px-5 md:px-8 py-4 flex items-center justify-between">
-
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#77709D] flex items-center justify-center text-white">
               <Radio size={21} />
@@ -34,10 +30,10 @@ export default function HotspotEntry() {
             </div>
 
             <div className="hidden sm:flex items-center gap-2 ml-4 rounded-full bg-[#F7F6F2] px-3 py-2">
-              <span className="w-2 h-2 rounded-full bg-[#D9E52E]" />
+              <span className="w-2 h-2 rounded-full bg-[#88849A]" />
               <Wifi size={13} className="text-[#77709D]" />
               <span className="text-[10px] text-[#17152D]">
-                Connected to Weza Wi-Fi
+                Portal preview
               </span>
             </div>
           </div>
@@ -70,41 +66,27 @@ export default function HotspotEntry() {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
-
-        {/* Connection indicator */}
         <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm mb-5">
-          <span className="w-2 h-2 rounded-full bg-[#D9E52E]" />
-
+          <span className="w-2 h-2 rounded-full bg-[#88849A]" />
           <Wifi size={13} className="text-[#77709D]" />
 
           <span className="text-[10px] text-[#17152D]">
-            Connected to Weza Wi-Fi
-          </span>
-
-          <span className="text-[#88849A]">•</span>
-
-          <span className="text-[10px] text-[#77709D]">
-            Internet Inactive
+            Network status unverified
           </span>
         </div>
 
         {/* Welcome card */}
         <section className="w-full max-w-[345px] bg-white rounded-xl shadow-md border border-[#EDECE8] overflow-hidden">
-
-          {/* Decorative top border */}
           <div className="h-1 bg-gradient-to-r from-[#77709D] to-[#D9E52E]" />
 
           <div className="p-6 text-center">
-
-            {/* Gateway label */}
             <div className="inline-flex items-center gap-2 rounded-full bg-[#F0EEF6] px-3 py-1.5 mb-5">
               <Radio size={12} className="text-[#77709D]" />
               <span className="text-[9px] font-semibold tracking-wide text-[#655F75]">
-                PUBLIC HOTSPOT GATEWAY
+                PUBLIC HOTSPOT PREVIEW
               </span>
             </div>
 
-            {/* Wi-Fi icon */}
             <div className="w-16 h-16 rounded-full bg-[#F0EEF6] flex items-center justify-center mx-auto mb-4 relative">
               <Wifi size={30} className="text-[#77709D]" />
 
@@ -113,22 +95,17 @@ export default function HotspotEntry() {
               </span>
             </div>
 
-            {/* Heading */}
             <h1 className="text-xl font-bold text-[#17152D]">
               Welcome to Weza Wi-Fi
             </h1>
 
             <p className="text-xs leading-5 text-[#655F75] mt-2">
-              You are connected to the Weza Wi-Fi hotspot.
-              Select a package to activate high-speed internet
-              on your device.
+              Browse sample packages and preview the checkout flow.
             </p>
 
-            {/* Gateway status */}
             <div className="mt-6 rounded-lg bg-[#F7F6F2] p-3 flex items-center justify-between gap-2">
-
               <div className="flex items-center gap-2 text-left">
-                <div className="w-8 h-8 rounded-full bg-[#F0EEF6] flex items-center justify-center">
+                <div className="w-8 h-8 shrink-0 rounded-full bg-[#F0EEF6] flex items-center justify-center">
                   <Radio size={15} className="text-[#77709D]" />
                 </div>
 
@@ -136,27 +113,24 @@ export default function HotspotEntry() {
                   <p className="text-[10px] font-semibold text-[#17152D]">
                     Gateway Status
                   </p>
-                  <p className="text-[9px] text-[#88849A]">
-                    Connected to Weza Wi-Fi · Internet inactive
+                  <p className="text-[9px] text-[#655F75]">
+                    Live connection and payment checks are unavailable in this preview.
                   </p>
                 </div>
               </div>
 
               <span className="shrink-0 rounded-full bg-[#EAE8E3] px-2 py-1 text-[8px] font-semibold text-[#655F75]">
-                AWAITING PASS
+                PREVIEW
               </span>
-
             </div>
 
-            {/* Actions */}
             <div className="mt-5 space-y-2">
-
               <Link
                 to="/packages"
                 className="w-full min-h-11 flex items-center justify-center gap-2 rounded-full bg-[#D9E52E] hover:bg-[#CBD622] text-[#17152D] text-xs font-semibold transition-colors"
               >
                 Browse Packages
-                <ArrowRight size={15} />
+                <ArrowRight size={15} aria-hidden="true" />
               </Link>
 
               <div className="min-h-10 border border-dashed border-[#77709D] flex items-center justify-center rounded-sm text-[10px] text-[#655F75]">
@@ -169,15 +143,12 @@ export default function HotspotEntry() {
                   Sign In
                 </Link>
               </div>
-
             </div>
-
           </div>
         </section>
 
         {/* Help links */}
         <div className="flex flex-wrap items-center justify-center gap-4 mt-5 text-[10px] text-[#77709D]">
-
           <Link to="/support" className="flex items-center gap-1 hover:underline">
             <CircleHelp size={12} />
             Need help? Get Support
@@ -187,17 +158,14 @@ export default function HotspotEntry() {
 
           <Link to="/support" className="flex items-center gap-1 hover:underline">
             <ShieldCheck size={12} />
-            Instant M-Pesa Setup
+            M-Pesa Help
           </Link>
-
         </div>
-
       </main>
 
       {/* Footer */}
       <footer className="bg-white border-t border-[#F0EEF6]">
         <div className="max-w-7xl mx-auto px-5 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-
           <div className="flex items-center gap-2 text-[9px] text-[#77709D]">
             <div className="w-5 h-5 rounded-md bg-[#77709D] flex items-center justify-center text-white">
               <Radio size={11} />
@@ -215,13 +183,11 @@ export default function HotspotEntry() {
 
             <span className="flex items-center gap-1">
               <ShieldCheck size={11} />
-              Secure Safaricom Gateway
+              Payment preview
             </span>
           </div>
-
         </div>
       </footer>
-
     </div>
   )
 }
