@@ -23,6 +23,7 @@ EXPECTED = ExpectedPayment(
     phone_number=PHONE,
 )
 
+
 def make_success(**overrides) -> StkCallback:
     """A callback that matches EXPECTED exactly; overrides break one thing."""
     base = StkCallback(
@@ -34,9 +35,11 @@ def make_success(**overrides) -> StkCallback:
         mpesa_receipt_number="NLJ7RT61SV",
         phone_number=PHONE,
         transaction_date=datetime(
-            2019, 12, 19, 10, 21, 15, tzinfo=timezone(timedelta(hours=3))),
+            2019, 12, 19, 10, 21, 15, tzinfo=timezone(timedelta(hours=3))
+        ),
     )
     return dataclasses.replace(base, **overrides)
+
 
 def make_failure(**overrides) -> StkCallback:
     """A cancelled-by-user callback for the same payment."""
@@ -52,6 +55,7 @@ def make_failure(**overrides) -> StkCallback:
     )
     return dataclasses.replace(base, **overrides)
 
+
 def test_matching_success_is_success_matched():
     assert verify_callback(make_success(), EXPECTED) is CallbackVerdict.SUCCESS_MATCHED
 
@@ -62,14 +66,16 @@ def test_matching_failure_is_failure_matched(code):
 
     assert verify_callback(callback, EXPECTED) is CallbackVerdict.FAILURE_MATCHED
 
+
 @pytest.mark.parametrize("make", [make_success, make_failure])
 def test_other_checkout_id_is_rejected(make):
     callback = make(checkout_request_id="ws_CO_SOMEONE_ELSE")
 
-    assert(
+    assert (
         verify_callback(callback, EXPECTED)
         is CallbackVerdict.REJECTED_CHECKOUT_ID_MISMATCH
     )
+
 
 @pytest.mark.parametrize("make", [make_success, make_failure])
 def test_other_merchant_id_is_rejected(make):
@@ -79,6 +85,7 @@ def test_other_merchant_id_is_rejected(make):
         verify_callback(callback, EXPECTED)
         is CallbackVerdict.REJECTED_MERCHANT_ID_MISMATCH
     )
+
 
 @pytest.mark.parametrize("paid", [1, 99, 101, 10000])
 def test_any_amount_difference_is_rejected(paid):
@@ -90,6 +97,7 @@ def test_any_amount_difference_is_rejected(paid):
         is CallbackVerdict.REJECTED_AMOUNT_MISMATCH
     )
 
+
 @pytest.mark.parametrize("other_phone", ["254712345678", "254708374148"])
 def test_other_phone_is_rejected(other_phone):
     callback = make_success(phone_number=other_phone)
@@ -99,6 +107,7 @@ def test_other_phone_is_rejected(other_phone):
         is CallbackVerdict.REJECTED_PHONE_MISMATCH
     )
 
+
 def test_identity_is_checked_before_amount():
     # Both the ID and the amount are wrong: the ID verdict must win, always.
     callback = make_success(checkout_request_id="ws_CO_SOMEONE_ELSE", amount=1)
@@ -107,6 +116,7 @@ def test_identity_is_checked_before_amount():
         verify_callback(callback, EXPECTED)
         is CallbackVerdict.REJECTED_CHECKOUT_ID_MISMATCH
     )
+
 
 @pytest.mark.parametrize(
     "missing", ["amount", "mpesa_receipt_number", "phone_number"]
@@ -119,6 +129,7 @@ def test_success_missing_payment_details_is_rejected(missing):
         is CallbackVerdict.REJECTED_INCOMPLETE_SUCCESS
     )
 
+
 @pytest.mark.parametrize("bad_amount", [0, -1, True, 1.5, "100"])
 def test_expected_payment_rejects_bad_amounts(bad_amount):
     with pytest.raises(ValueError):
@@ -128,6 +139,7 @@ def test_expected_payment_rejects_bad_amounts(bad_amount):
             amount=bad_amount,
             phone_number=PHONE,
         )
+
 
 @pytest.mark.parametrize(
     "empty_field", ["checkout_request_id", "merchant_request_id", "phone_number"]
