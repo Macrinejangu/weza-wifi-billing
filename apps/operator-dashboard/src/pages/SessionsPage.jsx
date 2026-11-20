@@ -138,40 +138,9 @@ function SessionDetails({ session, opener, onClose }) {
     }
   }
 
-  const detailSections = [
-    {
-      title: 'Authentication state',
-      fields: [
-        ['Session ID', session.id],
-        ['Phone number', session.phone],
-        ['Package', session.package],
-      ],
-    },
-    {
-      title: 'Data usage',
-      fields: [
-        ['Download usage', session.download],
-        ['Upload usage', session.upload],
-      ],
-    },
-    {
-      title: 'Lease timeline',
-      fields: [
-        ['Sample start time', session.started],
-        ['Sample uptime', session.uptime],
-        ['Sample expiry', session.expiry],
-        ['Sample time remaining', session.remaining],
-      ],
-    },
-    {
-      title: 'Device & location',
-      fields: [
-        ['IP address', session.ip],
-        ['MAC address', session.mac],
-        ['Access point', session.node],
-      ],
-    },
-  ]
+  const [view, setView] = useState('overview')
+  const featuredSample = session.id === 'SES-DEMO-001'
+  const status = session.status === 'Active' ? 'Active Lease' : session.status
 
   return (
     <div
@@ -187,39 +156,101 @@ function SessionDetails({ session, opener, onClose }) {
         aria-labelledby="session-detail-title"
         onKeyDown={handleKeyDown}
       >
-        <div className="session-modal-heading">
-          <div>
-            <h2 id="session-detail-title">Session Details</h2>
-            <strong>{session.name}</strong>
-            <p className="session-eyebrow">SESSION INSPECTION · DEMO</p>
+        <header className="session-drawer-header">
+          <div className="session-modal-heading">
+            <div>
+              <h2 id="session-detail-title">Session Details</h2>
+              <p>Session ID #{session.id} · {session.name} · Demo</p>
+            </div>
+            <button ref={closeButtonRef} type="button" className="session-icon-button" aria-label="Close session details" onClick={onClose}>×</button>
           </div>
-          <button ref={closeButtonRef} type="button" className="session-icon-button" aria-label="Close session details" onClick={onClose}>×</button>
+          <div className="session-drawer-switch" role="group" aria-label="Session detail view">
+            <button type="button" aria-pressed={view === 'overview'} onClick={() => setView('overview')}>Overview</button>
+            <button type="button" aria-pressed={view === 'technical'} onClick={() => setView('technical')}>Technical Details</button>
+          </div>
+        </header>
+
+        <div className="session-drawer-body">
+          {view === 'overview' ? (
+            <>
+              <section className="session-detail-section session-auth-card">
+                <div className="session-drawer-card-heading">
+                  <h3>Authentication State</h3>
+                  <span className="session-connection-badge" data-status={session.status}>{status}</span>
+                </div>
+                <div className="session-drawer-person">
+                  <span className="session-avatar" aria-hidden="true">{initials(session.name)}</span>
+                  <div><strong>{session.name}</strong><p>{session.phone}</p></div>
+                </div>
+                <dl className="session-detail-grid">
+                  <div><dt>Package</dt><dd>{session.package}</dd></div>
+                  <div><dt>Applied speeds</dt><dd>{featuredSample ? '10 Mbps / 5 Mbps' : 'Unavailable'}</dd></div>
+                </dl>
+              </section>
+
+              <section className="session-detail-section">
+                <div className="session-drawer-card-heading">
+                  <h3>Quota Consumption</h3>
+                  {featuredSample && <span className="session-drawer-chip">34% consumed</span>}
+                </div>
+                {featuredSample ? (
+                  <>
+                    <div className="session-quota-numbers"><strong>3.42 GB</strong><span>Total cap: 10.00 GB</span></div>
+                    <progress aria-label="Sample quota consumption" value={3.42} max={10} />
+                    <p>6.58 GB available · Sample quota</p>
+                  </>
+                ) : <p>Quota and remaining allowance are unavailable for this sample session.</p>}
+              </section>
+
+              <section className="session-detail-section">
+                <div className="session-drawer-card-heading"><h3>Lease Timeline</h3><span className="session-drawer-chip">Fixed sample</span></div>
+                <dl className="session-drawer-rows">
+                  <div><dt>Start time</dt><dd>{session.started}</dd></div>
+                  <div><dt>Expiry time</dt><dd>{session.expiry}</dd></div>
+                  <div><dt>Remaining duration</dt><dd>{session.remaining}</dd></div>
+                </dl>
+              </section>
+
+              <section className="session-detail-section">
+                <h3>Device &amp; Location</h3>
+                <dl className="session-drawer-rows session-device-rows">
+                  <div><dt>Client device</dt><dd>{featuredSample ? 'iPhone 15 Pro' : 'Unavailable'}</dd></div>
+                  <div><dt>Client MAC</dt><dd>{session.mac}</dd></div>
+                  <div><dt>Access point</dt><dd>{session.node}</dd></div>
+                </dl>
+              </section>
+            </>
+          ) : (
+            <>
+              <section className="session-detail-section">
+                <h3>Network Identifiers</h3>
+                <dl className="session-drawer-rows">
+                  <div><dt>Session ID</dt><dd>{session.id}</dd></div>
+                  <div><dt>IP address</dt><dd>{session.ip}</dd></div>
+                  <div><dt>Client MAC</dt><dd>{session.mac}</dd></div>
+                  <div><dt>Access point</dt><dd>{session.node}</dd></div>
+                </dl>
+              </section>
+              <section className="session-detail-section">
+                <h3>Sample Traffic</h3>
+                <dl className="session-drawer-rows">
+                  <div><dt>Download</dt><dd>{session.download}</dd></div>
+                  <div><dt>Upload</dt><dd>{session.upload}</dd></div>
+                  <div><dt>Uptime</dt><dd>{session.uptime}</dd></div>
+                </dl>
+              </section>
+            </>
+          )}
         </div>
 
-        <div className="session-detail-status">
-          {session.status} · Illustrative record
-        </div>
-
-        <div className="session-detail-sections">
-          {detailSections.map(({ title, fields }) => (
-            <section className="session-detail-section" key={title} aria-label={title}>
-              <h3>{title}</h3>
-              <dl className="session-detail-grid">
-                {fields.map(([label, value]) => (
-                  <div key={label}>
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          ))}
-        </div>
-
-        <p className="session-modal-note">
-          Demonstration data only. This view is not connected to a live router, RADIUS server, or CoA service.
-        </p>
-        <button ref={footerButtonRef} type="button" className="session-primary-button" onClick={onClose}>Close details</button>
+        <footer className="session-drawer-footer">
+          <div className="session-drawer-footer-row">
+            <button type="button" className="session-secondary-button" disabled>Send Renewal STK</button>
+            <button ref={footerButtonRef} type="button" className="session-secondary-button" onClick={onClose}>Close details</button>
+          </div>
+          <button type="button" className="session-drawer-disconnect" disabled>Terminate Session (Disconnect RADIUS)</button>
+          <p>Demo mode. Renewal and disconnect are unavailable.</p>
+        </footer>
       </section>
     </div>
   )

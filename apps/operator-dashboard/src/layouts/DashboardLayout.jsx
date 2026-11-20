@@ -44,6 +44,8 @@ export default function DashboardLayout({ children, operator, activePage = 'over
           operator={operator}
           onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           mobileMenuOpen={mobileMenuOpen}
+          onOpenProfile={() => onNavigate('staff-profile')}
+          profileActive={activePage === 'staff-profile'}
         />
 
         <main className="dashboard-content">
