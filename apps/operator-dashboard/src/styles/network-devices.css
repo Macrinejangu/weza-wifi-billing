@@ -1,0 +1,96 @@
+.network-devices-page,
+.network-device-drawer {
+  --network-text: var(--color-text, #1e1e24);
+  --network-muted: var(--color-text-muted, #5f5f66);
+  --network-surface: var(--color-surface, #fff);
+  --network-soft: var(--color-surface-muted, #f4f4f2);
+  --network-border: var(--wz-color-border-subtle, #ededeb);
+  --network-accent: var(--color-accent, #d4e839);
+  color: var(--network-text);
+}
+.network-devices-page { display: grid; min-width: 0; gap: 16px; font-size: 14px; }
+.network-devices-page .network-devices-heading { margin-bottom: 0; flex-wrap: wrap; }
+.network-devices-page p,
+.network-device-drawer p { margin: 4px 0 0; color: var(--network-muted); line-height: 1.45; }
+.network-devices-page .network-device-eyebrow,
+.network-device-drawer .network-device-eyebrow { color: #585175; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.network-devices-page .network-device-demo { margin: 0; padding: 12px 14px; border-radius: 9px; background: #f6f4fa; font-size: 12px; }
+.network-device-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr)); gap: 16px; }
+.network-device-card,
+.network-device-inventory { min-width: 0; border-radius: 12px; background: var(--network-surface); box-shadow: var(--shadow-card, 0 3px 12px rgb(31 27 43 / 6%)); }
+.network-device-card { padding: 16px; }
+.network-device-card h2,
+.network-device-card h3 { margin: 0 0 8px; font-size: 14px; }
+.network-device-metrics strong { font-size: 24px; }
+.network-device-metrics p { font-size: 12px; }
+.network-device-filters,
+.network-device-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.network-device-filters input { min-width: 0; flex: 1 1 230px; }
+.network-device-filters input,
+.network-device-filters select,
+.network-devices-page button,
+.network-device-drawer button { min-height: 36px; max-width: 100%; padding: 7px 12px; border: 1px solid var(--network-border); border-radius: 8px; background: var(--network-soft); color: inherit; font: inherit; }
+.network-devices-page button,
+.network-device-drawer button { border-radius: 999px; font-weight: 600; cursor: pointer; }
+.network-devices-page button:disabled,
+.network-device-drawer button:disabled { opacity: .6; cursor: default; }
+.network-devices-page :focus-visible,
+.network-device-drawer :focus-visible { outline: 2px solid #746d97; outline-offset: 2px; }
+.network-device-inventory { overflow: hidden; }
+.network-device-inventory-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 16px; }
+.network-device-inventory-heading h2 { margin: 0; font-size: 16px; }
+.network-device-inventory-heading p,
+.network-devices-page .network-device-results { font-size: 12px; }
+.network-device-table-scroll { overflow-x: auto; }
+.network-device-inventory table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; }
+.network-device-inventory th,
+.network-device-inventory td { padding: 12px; border-bottom: 1px solid var(--network-border); }
+.network-device-inventory thead th { background: var(--network-soft); color: var(--network-muted); font-size: 11px; text-transform: uppercase; }
+.network-device-inventory small { display: block; color: var(--network-muted); font-size: 12px; font-weight: 500; }
+.network-device-results { padding: 8px 14px; }
+.network-device-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.network-device-status[data-status="Online"] { background: #e8f5e9; color: #195936; }
+.network-device-status[data-status="Degraded"] { background: #fff4e5; color: #754600; }
+.network-device-status[data-status="Offline"] { background: #feeceb; color: #98251d; }
+.network-device-drawer { inset: 0 0 0 auto; width: min(480px, 100%); max-width: 100%; height: 100%; max-height: 100%; margin: 0 0 0 auto; padding: 0; border: 0; background: var(--network-surface); box-shadow: -8px 0 30px rgb(30 30 36 / 14%); }
+.network-device-drawer::backdrop { background: rgb(30 30 36 / 24%); backdrop-filter: blur(2px); }
+.network-drawer-layout { display: flex; flex-direction: column; height: 100%; }
+.network-drawer-layout header,
+.network-drawer-layout footer { padding: 16px 20px; background: var(--network-soft); }
+.network-drawer-layout header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.network-drawer-layout h2 { margin: 4px 0; font-size: 21px; }
+.network-drawer-body { display: grid; align-content: start; flex: 1; min-height: 0; gap: 12px; padding: 16px; overflow-y: auto; overscroll-behavior: contain; }
+.network-drawer-body .network-device-card { border: 1px solid var(--network-border); box-shadow: none; }
+.network-drawer-body dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0 0; }
+.network-drawer-body dt { color: var(--network-muted); font-size: 12px; }
+.network-drawer-body dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.network-drawer-layout footer p { margin-bottom: 8px; font-size: 12px; }
+.network-drawer-layout footer .network-device-actions { justify-content: space-between; }
+.network-device-drawer .network-device-primary { background: var(--network-accent); }
+
+.network-fixed-label { padding: 7px 12px; border-radius: 999px; background: var(--network-surface); font-size: 12px; }
+.network-devices-page .network-ping-sweep { background: #585175; color: #fff; }
+.network-devices-page button[aria-pressed="true"] { background: var(--network-accent); }
+.network-device-drawer .network-identity-card,
+.network-telemetry-grid > div,
+.network-related-list li,
+.network-event-list { background: var(--network-soft); }
+.network-card-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.network-card-heading h3 { margin: 0; font-size: 12px; text-transform: uppercase; }
+.network-card-heading small,
+.network-related-list small,
+.network-event-list small { color: var(--network-muted); font-size: 12px; }
+.network-identity-fields > div,
+.network-device-location { padding: 9px; border-radius: 8px; background: var(--network-surface); }
+.network-identity-card .network-device-location { margin-top: 8px; }
+.network-drawer-body .network-telemetry-grid { margin: 0; gap: 8px; }
+.network-telemetry-grid > div { padding: 10px; border-radius: 8px; }
+.network-related-list,
+.network-event-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.network-related-list li { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 8px; font-size: 13px; }
+.network-related-list li > div { margin-left: auto; text-align: right; }
+.network-related-list small,
+.network-event-list small { display: block; }
+.network-subscriber-avatar { display: grid; place-items: center; width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%; background: #ecebf2; color: #3e2d82; font-size: 11px; font-weight: 700; }
+.network-event-list { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+.network-integration-note { font-size: 13px; }

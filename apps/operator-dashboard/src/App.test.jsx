@@ -7,6 +7,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
+import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
@@ -123,7 +124,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(2)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(1)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -254,4 +255,14 @@ test('renders the demo incident list and opens the linked payment incident by ID
   expect(detail).toContain('Router CoA Timeout')
   expect(detail).toContain('RJ92MN38X2')
   expect(detail).toContain('Activation Failed')
+})
+
+
+test('renders the demo equipment inventory and named device inspection controls', () => {
+  const html = renderToStaticMarkup(<NetworkDevicesPage />)
+
+  expect(html).toContain('Equipment Inventory')
+  expect(html).toContain('Filter by sector')
+  expect(html).toContain('Needs Attention First')
+  expect(html).toContain('aria-label="View device AP-Westlands-02"')
 })

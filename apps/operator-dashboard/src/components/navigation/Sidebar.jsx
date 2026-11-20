@@ -5,7 +5,7 @@ const navigationItems = [
   { id: 'payments', label: 'Payments', icon: 'payments', enabled: true },
   { id: 'sessions', label: 'Sessions', icon: 'wifi', enabled: true },
   { id: 'connection-issues', label: 'Connection Issues', icon: 'warning', badge: '3', enabled: true },
-  { id: 'network-devices', label: 'Network & Devices', icon: 'router' },
+  { id: 'network-devices', label: 'Network & Devices', icon: 'router', enabled: true },
   { id: 'settings', label: 'Settings', icon: 'settings' },
 ]
 

@@ -5,6 +5,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
+import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { demoDataEnabled } from '../../shared/demoMode.js'
@@ -44,6 +45,8 @@ export default function App() {
           <SessionsPage />
         ) : activePage === 'connection-issues' ? (
           <ConnectionIssuesPage key={selectedIssueId ?? 'list'} initialIssueId={selectedIssueId} />
+        ) : activePage === 'network-devices' ? (
+          <NetworkDevicesPage />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}
