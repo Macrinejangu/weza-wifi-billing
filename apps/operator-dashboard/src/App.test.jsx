@@ -220,6 +220,6 @@ test('renders payment search, status filters and inspection controls', () => {
   expect(html).toContain('Confirmed')
   expect(html).toContain('Pending')
   expect(html).toContain('Inspect')
-  expect(html).toContain('Today')
-  expect(html).toContain('EAT (UTC+3)')
+  expect(html).toContain('19 Nov 2026 · EAT (UTC+3)')
+  expect(html).not.toContain('Today')
 })
