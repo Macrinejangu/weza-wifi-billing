@@ -7,6 +7,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
+import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
 import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
@@ -114,7 +115,7 @@ test('provides an accessible control for opening NOC support', () => {
   expect(html).toContain('type="button"')
 })
 
-test('disables navigation destinations that are not implemented', () => {
+test('renders enabled dashboard destinations', () => {
   const html = renderToStaticMarkup(
     <DashboardLayout operator={developmentOperator}>
       <DashboardPage operator={developmentOperator} />
@@ -124,7 +125,8 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(1)
+  expect(navigation).toContain('Settings')
+  expect(navigation).not.toContain('disabled=""')
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -265,4 +267,14 @@ test('renders the demo equipment inventory and named device inspection controls'
   expect(html).toContain('Filter by sector')
   expect(html).toContain('Needs Attention First')
   expect(html).toContain('aria-label="View device AP-Westlands-02"')
+})
+
+
+test('renders the demo settings sections and local save control', () => {
+  const html = renderToStaticMarkup(<SystemSettingsPage />)
+
+  expect(html).toContain('General Preferences')
+  expect(html).toContain('Integration Status')
+  expect(html).toContain('Staff Access &amp; Operator Roles')
+  expect(html).toContain('Save Changes')
 })

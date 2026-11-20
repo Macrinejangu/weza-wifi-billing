@@ -6,7 +6,7 @@ const navigationItems = [
   { id: 'sessions', label: 'Sessions', icon: 'wifi', enabled: true },
   { id: 'connection-issues', label: 'Connection Issues', icon: 'warning', badge: '3', enabled: true },
   { id: 'network-devices', label: 'Network & Devices', icon: 'router', enabled: true },
-  { id: 'settings', label: 'Settings', icon: 'settings' },
+  { id: 'settings', label: 'Settings', icon: 'settings', enabled: true },
 ]
 
 export default function Sidebar({ mobileMenuOpen, onClose, operator, activePage = 'overview', onNavigate = () => {} }) {

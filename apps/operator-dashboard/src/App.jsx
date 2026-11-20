@@ -5,6 +5,7 @@ import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
+import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
 import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
@@ -47,6 +48,8 @@ export default function App() {
           <ConnectionIssuesPage key={selectedIssueId ?? 'list'} initialIssueId={selectedIssueId} />
         ) : activePage === 'network-devices' ? (
           <NetworkDevicesPage />
+        ) : activePage === 'settings' ? (
+          <SystemSettingsPage />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}
