@@ -83,3 +83,73 @@ def test_database_rejects_unknown_role_and_status(db):
         with pytest.raises(IntegrityError):
             add_user(db, role=role, status=status)
         db.rollback()
+
+
+PACKAGE_PAYLOAD = {
+    "name": "Demo",
+    "service_type": "hotspot",
+    "price": 20,
+    "duration_minutes": 60,
+    "download_speed_mbps": 5,
+    "upload_speed_mbps": 2,
+}
+
+
+@pytest.mark.parametrize(("role", "status", "minutes", "expected"), [
+    (None, None, None, 401),
+    ("customer", "active", 60, 403),
+    ("operator", "suspended", 60, 401),
+    ("operator", "active", -1, 401),
+])
+def test_package_writes_reject_unauthorized_requests(client, db, package, role, status, minutes, expected):
+    headers = {}
+    if role:
+        user = add_user(db, role=role, status=status)
+        headers["Authorization"] = f"Bearer {create_token(user.id, minutes=minutes)}"
+
+    path = f"/api/packages/{package.id}"
+    assert client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers).status_code == expected
+    assert client.put(path, json={**PACKAGE_PAYLOAD, "is_active": False}, headers=headers).status_code == expected
+    assert client.delete(path, headers=headers).status_code == expected
+    assert client.get("/api/packages/").json()[0]["name"] == "1 Hour"
+    assert db.query(type(package)).count() == 1
+
+
+@pytest.mark.parametrize("role", ["operator", "admin"])
+def test_staff_package_writes_require_mock_mode(client, db, monkeypatch, role):
+    add_user(db, role=role)
+    token = login(client).json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
+    assert client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers).status_code == 404
+
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
+    invalid_package = {**PACKAGE_PAYLOAD, "duration_minutes": 0}
+    assert client.post("/api/packages/", json=invalid_package, headers=headers).status_code == 422
+    created = client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers)
+    assert created.status_code == 200
+    path = f"/api/packages/{created.json()['id']}"
+    updated_package = {**PACKAGE_PAYLOAD, "price": 30, "is_active": True}
+
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
+    assert client.put(path, json=updated_package, headers=headers).status_code == 404
+    assert client.delete(path, headers=headers).status_code == 404
+    assert client.get("/api/packages/").json()[0]["price"] == 20
+
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
+    updated = client.put(path, json=updated_package, headers=headers)
+    assert updated.status_code == 200 and updated.json()["price"] == 30
+    assert client.delete(path, headers=headers).status_code == 200
+    assert client.get("/api/packages/").json() == []
+
+
+@pytest.mark.parametrize("stored_hash", ["missing-separator", "z" * 32 + "$" + "0" * 128,
+                                        "0" * 32 + "$" + "é" * 128])
+def test_malformed_password_hash_returns_generic_login_failure(client, db, stored_hash):
+    user = add_user(db)
+    user.password_hash = stored_hash
+    db.commit()
+
+    response = login(client)
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid email or password"}

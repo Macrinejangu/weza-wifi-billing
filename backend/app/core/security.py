@@ -17,9 +17,20 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored: str) -> bool:
-    salt, key = stored.split("$")
-    check = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=2**14, r=8, p=1)
-    return hmac.compare_digest(check.hex(), key)
+    salt_hex, separator, key_hex = stored.partition("$")
+    if not separator or len(salt_hex) != 32 or len(key_hex) != 128:
+        return False
+
+    try:
+        salt = bytes.fromhex(salt_hex)
+        key = bytes.fromhex(key_hex)
+    except ValueError:
+        return False
+    if len(salt) != 16 or len(key) != 64:
+        return False
+
+    check = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
+    return hmac.compare_digest(check, key)
 
 
 def _secret() -> str:
@@ -37,6 +48,8 @@ def create_token(user_id: int, minutes: int = 60) -> str:
 def read_token(token: str) -> int | None:
     """The user id inside a valid, unexpired token, otherwise None."""
     try:
-        return int(jwt.decode(token, _secret(), algorithms=["HS256"])["sub"])
-    except (jwt.PyJWTError, KeyError, ValueError):
+        claims = jwt.decode(token, _secret(), algorithms=["HS256"], options={"require": ["sub", "exp"]})
+        user_id = int(claims["sub"])
+    except (jwt.PyJWTError, TypeError, ValueError, OverflowError):
         return None
+    return user_id if 0 < user_id <= 2**31 - 1 else None

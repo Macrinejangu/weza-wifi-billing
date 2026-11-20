@@ -3,7 +3,7 @@ import '../styles/dashboard.css'
 import Sidebar from '../components/navigation/Sidebar.jsx'
 import Header from '../components/navigation/Header.jsx'
 
-export default function DashboardLayout({ children, operator }) {
+export default function DashboardLayout({ children, operator, activePage = 'overview', onNavigate = () => {} }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Allow the mobile navigation drawer to close with the Escape key.
@@ -27,6 +27,8 @@ export default function DashboardLayout({ children, operator }) {
         operator={operator}
         mobileMenuOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
+        activePage={activePage}
+        onNavigate={onNavigate}
       />
 
       {mobileMenuOpen && (

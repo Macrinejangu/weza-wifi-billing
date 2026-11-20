@@ -3,6 +3,8 @@ import { expect, test } from 'vitest'
 import App from './App.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
+import CustomersPage from './pages/CustomersPage.jsx'
+import PackagesPage from './pages/PackagesPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
 test('renders the operator dashboard shell', () => {
@@ -112,6 +114,76 @@ test('disables navigation destinations that are not implemented', () => {
   const navigation = html.match(/<nav[^>]*>[\s\S]*?<\/nav>/)?.[0] ?? ''
 
   expect(navigation).toContain('aria-current="page"')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(7)
+  expect(navigation).toContain('Customers')
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(5)
   expect(navigation).not.toContain('href="#"')
+})
+
+
+test('renders the customer directory with illustrative summary data', () => {
+  const html = renderToStaticMarkup(<CustomersPage />)
+
+  expect(html).toContain('Customers')
+  expect(html).toContain('Total Registered')
+  expect(html).toContain('<strong>10</strong>')
+  expect(html).toContain('Active Online')
+  expect(html).toContain('<strong>4</strong>')
+  expect(html).toContain('Suspended / Inactive')
+  expect(html).toContain('<strong>2</strong>')
+  expect((html.match(/scope="col"/g) ?? []).length).toBe(7)
+  expect((html.match(/scope="row"/g) ?? []).length).toBe(7)
+  expect(html).toContain('Illustrative demo data')
+  expect(html).toContain('Amina Wanjiku')
+  expect(html).toContain('Dennis Kiprono')
+  expect(html).toContain('Faith Mwangi')
+  expect(html).toContain('Brian Otieno')
+  expect(html).toContain('Esther Njeri')
+  expect(html).toContain('Grace Achieng')
+  expect(html).not.toContain('Samuel Kariuki')
+})
+
+test('renders customer search, status filters, registration and pagination controls', () => {
+  const html = renderToStaticMarkup(<CustomersPage />)
+
+  expect(html).toContain('Search customers')
+  expect(html).toContain('Search name, phone or customer ID')
+  expect(html).toContain('aria-label="Filter customers by status"')
+  expect(html).toContain('aria-pressed="true"')
+  expect(html).toContain('Active')
+  expect(html).toContain('Expired')
+  expect(html).toContain('Flagged')
+  expect(html).toContain('Register customer')
+  expect(html).toContain('View profile for Amina Wanjiku')
+  expect(html).toContain('Filter by package')
+  expect(html).toContain('Showing 1–7 of 10 sample records')
+  expect(html).toContain('aria-label="Previous page"')
+  expect(html).toContain('aria-label="Next page"')
+  expect(html).toContain('1 / 2')
+})
+
+
+test('renders the six demo internet packages', () => {
+  const html = renderToStaticMarkup(<PackagesPage />)
+
+  expect(html).toContain('>Packages</h1>')
+  expect(html).toContain('Quick Connect')
+  expect(html).toContain('Daily Connect')
+  expect(html).toContain('Weekly Plus')
+  expect(html).toContain('Monthly Max')
+  expect(html).toContain('Night Owl 12h')
+  expect(html).toContain('Unlimited 24h')
+  expect(html).toContain('Add Package')
+  expect(html).toContain('Demo data')
+})
+
+test('renders package status and type filters with counts derived from the demo rows', () => {
+  const html = renderToStaticMarkup(<PackagesPage />)
+
+  expect(html).toContain('Filter packages by status')
+  expect(html).toContain('Filter packages by type')
+  expect(html).toContain('All (6)')
+  expect(html).toContain('Active (5)')
+  expect(html).toContain('Inactive (1)')
+  expect(html).toContain('Hotspot Captive')
+  expect(html).toContain('Home Fiber')
 })
