@@ -9,6 +9,7 @@ import ActivityHistoryPage from './pages/ActivityHistoryPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
 import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
+import StaffProfilePage from './pages/StaffProfilePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { demoDataEnabled } from '../../shared/demoMode.js'
 import { developmentOperator } from './operatorIdentity.js'
@@ -28,6 +29,11 @@ export default function App() {
   function inspectIssue(issueId) {
     setSelectedIssueId(issueId)
     setActivePage('connection-issues')
+  }
+
+  function closePreview() {
+    navigate('overview')
+    setShowDashboardPreview(false)
   }
 
   if (demoDataEnabled && showDashboardPreview) {
@@ -53,6 +59,8 @@ export default function App() {
           <SystemSettingsPage onOpenAuditHistory={() => navigate('audit-history')} />
         ) : activePage === 'audit-history' ? (
           <ActivityHistoryPage onBack={() => navigate('settings')} onInspectIssue={inspectIssue} />
+        ) : activePage === 'staff-profile' ? (
+          <StaffProfilePage operator={developmentOperator} onSignOut={closePreview} />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}
@@ -60,7 +68,7 @@ export default function App() {
         <div className="dashboard-preview-return">
           <button
             type="button"
-            onClick={() => setShowDashboardPreview(false)}
+            onClick={closePreview}
           >
             Return to Staff Login
           </button>

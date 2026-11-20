@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { expect, test, vi } from 'vitest'
 import App from './App.jsx'
+import StaffProfilePage from './pages/StaffProfilePage.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
@@ -288,4 +289,13 @@ test('renders the demo audit log with filters and named event inspection control
   expect(html).toContain('Search audit history')
   expect(html).toContain('Inspect event EVT-89210')
   expect(html).toContain('Pending Router Response')
+})
+
+test('renders the operator profile with sample session and security controls', () => {
+  const html = renderToStaticMarkup(<StaffProfilePage operator={developmentOperator} />)
+
+  expect(html).toContain('My Profile &amp; Security')
+  expect(html).toContain('Moses Lenkai')
+  expect(html).toContain('Active Console Sessions')
+  expect(html).toContain('Password changes require an authenticated staff account.')
 })
