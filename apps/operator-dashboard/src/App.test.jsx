@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
+import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
 
@@ -122,7 +123,7 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(3)
+  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(2)
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -241,4 +242,16 @@ test('renders the Payments preview with separate settlement and access statuses'
   expect(transaction).toContain('Confirmed')
   expect(transaction).toContain('Activation Failed')
   expect(transaction).toContain('Inspect payment for Dennis Kiprono')
+})
+
+
+test('renders the demo incident list and opens the linked payment incident by ID', () => {
+  const list = renderToStaticMarkup(<ConnectionIssuesPage />)
+  const detail = renderToStaticMarkup(<ConnectionIssuesPage initialIssueId="ISS-4091" />)
+
+  expect(list).toContain('Search connection issues')
+  expect(list).toContain('ISS-4091')
+  expect(detail).toContain('Router CoA Timeout')
+  expect(detail).toContain('RJ92MN38X2')
+  expect(detail).toContain('Activation Failed')
 })

@@ -4,6 +4,7 @@ import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
+import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
 import SessionsPage from './pages/SessionsPage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { demoDataEnabled } from '../../shared/demoMode.js'
@@ -14,21 +15,35 @@ export default function App() {
   const [showDashboardPreview, setShowDashboardPreview] = useState(false)
   const [activePage, setActivePage] = useState('overview')
 
+  const [selectedIssueId, setSelectedIssueId] = useState(null)
+
+  function navigate(page) {
+    setSelectedIssueId(null)
+    setActivePage(page)
+  }
+
+  function inspectIssue(issueId) {
+    setSelectedIssueId(issueId)
+    setActivePage('connection-issues')
+  }
+
   if (demoDataEnabled && showDashboardPreview) {
     return (
       <DashboardLayout
         operator={developmentOperator}
         activePage={activePage}
-        onNavigate={setActivePage}
+        onNavigate={navigate}
       >
         {activePage === 'customers' ? (
           <CustomersPage />
         ) : activePage === 'packages' ? (
           <PackagesPage />
         ) : activePage === 'payments' ? (
-          <PaymentsPage />
+          <PaymentsPage onInspectIssue={inspectIssue} />
         ) : activePage === 'sessions' ? (
           <SessionsPage />
+        ) : activePage === 'connection-issues' ? (
+          <ConnectionIssuesPage key={selectedIssueId ?? 'list'} initialIssueId={selectedIssueId} />
         ) : (
           <DashboardPage operator={developmentOperator} />
         )}

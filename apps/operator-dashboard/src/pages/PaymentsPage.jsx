@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import '../styles/payments.css'
 
 const sampleDate = '19 Nov 2026'
@@ -37,7 +38,7 @@ function StatusPill({ status, type = 'payment' }) {
   )
 }
 
-function TransactionDrawer({ transaction, trigger, onClose }) {
+function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue }) {
   const drawerRef = useRef(null)
   const closeButtonRef = useRef(null)
   const [drawerNotice, setDrawerNotice] = useState('')
@@ -103,8 +104,12 @@ function TransactionDrawer({ transaction, trigger, onClose }) {
           confirmed ? 'success' : transaction.paymentStatus === 'Failed' ? 'failure' : 'neutral'],
       ]
 
-  function showIssueNotice() {
-    setDrawerNotice(`${issueId} is a sample incident. The Connection Issues screen is pending.`)
+  function inspectRelatedIssue() {
+    if (onInspectIssue) {
+      onInspectIssue(issueId.slice(1))
+    } else {
+      setDrawerNotice(`${issueId} is a sample incident. Issue navigation is unavailable.`)
+    }
   }
 
   return (
@@ -166,7 +171,7 @@ function TransactionDrawer({ transaction, trigger, onClose }) {
               <div>
                 <h3>Active Issue: {issueId}</h3>
                 <p>Router CoA timed out after payment confirmation. Internet access stayed inactive.</p>
-                <button type="button" className="payment-drawer-link" onClick={showIssueNotice}>Inspect Issue Details <span aria-hidden="true">→</span></button>
+                <button type="button" className="payment-drawer-link" onClick={inspectRelatedIssue}>Inspect Issue Details <span aria-hidden="true">→</span></button>
               </div>
             </section>
           )}
@@ -210,7 +215,7 @@ function TransactionDrawer({ transaction, trigger, onClose }) {
           <p className="payment-demo-note" role="status">{drawerNotice || 'Illustrative transaction and audit events.'}</p>
           <div className="payment-drawer-actions">
             <button type="button" className="payment-secondary-button" onClick={onClose}>Close Drawer</button>
-            {issueId && <button type="button" className="payment-primary-button" onClick={showIssueNotice}>View Issue {issueId}</button>}
+            {issueId && <button type="button" className="payment-primary-button" onClick={inspectRelatedIssue}>View Issue {issueId}</button>}
           </div>
         </footer>
       </aside>
@@ -218,7 +223,16 @@ function TransactionDrawer({ transaction, trigger, onClose }) {
   )
 }
 
-export default function PaymentsPage() {
+export default function PaymentsPage({ onInspectIssue }) {
+  return demoDataEnabled ? <DemoPaymentsPage onInspectIssue={onInspectIssue} /> : (
+    <section className="payment-monitor-page">
+      <h1>Payments</h1>
+      <p role="status">Payment records are currently unavailable.</p>
+    </section>
+  )
+}
+
+function DemoPaymentsPage({ onInspectIssue }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [selectedPackage, setSelectedPackage] = useState('')
@@ -386,6 +400,7 @@ export default function PaymentsPage() {
         <TransactionDrawer
           transaction={inspection.transaction}
           trigger={inspection.trigger}
+          onInspectIssue={onInspectIssue}
           onClose={() => setInspection(null)}
         />
       )}
