@@ -1,7 +1,8 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import ActivationAttempt, Payment
+from app.core.security import hash_password
+from app.models import ActivationAttempt, Payment, User
 from app.services.mock_payment import process_mock_payment
 from app.services.payment_service import apply_payment_result, create_payment
 from app.services.purchase_service import create_purchase
@@ -88,18 +89,46 @@ def test_mock_purchase_payment_and_activation(client, user, package):
     assert client.get(path).json() == active.json()
 
 
-def test_package_writes_require_mock_mode(client, monkeypatch):
+def test_package_writes_require_mock_mode(client, db, monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "x" * 40)
+    staff = User(
+        full_name="Staff",
+        email="billing-staff@weza.local",
+        password_hash=hash_password("correct-horse-battery"),
+        role="operator",
+        status="active",
+    )
+    db.add(staff)
+    db.commit()
+
+    login = client.post("/api/auth/login", json={
+        "email": "billing-staff@weza.local",
+        "password": "correct-horse-battery",
+    })
+    assert login.status_code == 200
+    headers = {
+        "Authorization": f"Bearer {login.json()['access_token']}"
+    }
+
     monkeypatch.delenv("ENABLE_MOCK_PAYMENTS", raising=False)
     payload = {
         "name": "Demo", "service_type": "hotspot", "price": 20,
         "duration_minutes": 60, "download_speed_mbps": 5, "upload_speed_mbps": 2,
     }
-    assert client.post("/api/packages/", json=payload).status_code == 404
+    assert client.post("/api/packages/", json=payload, headers=headers).status_code == 404
+
     monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
-    assert client.post("/api/packages/", json={**payload, "duration_minutes": 0}).status_code == 422
-    created = client.post("/api/packages/", json=payload)
+    assert client.post(
+        "/api/packages/",
+        json={**payload, "duration_minutes": 0},
+        headers=headers,
+    ).status_code == 422
+
+    created = client.post("/api/packages/", json=payload, headers=headers)
     assert created.status_code == 200
-    assert client.delete(f"/api/packages/{created.json()['id']}").status_code == 200
+    assert client.delete(
+        f"/api/packages/{created.json()['id']}", headers=headers
+    ).status_code == 200
     assert client.get("/api/packages/").json() == []
 
 
