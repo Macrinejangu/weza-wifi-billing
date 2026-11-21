@@ -4,7 +4,11 @@ from typing import Callable
 from sqlalchemy.orm import Session
 
 from app.models import ActivationAttempt, Payment, WiFiSession
-from app.services.access_auth import activate_access_device
+from app.services.access_auth import (
+    activate_access_device,
+    get_access_authenticator,
+    MikroTikAuthenticator,
+)
 
 
 def create_session(
@@ -82,6 +86,19 @@ def activate_session(
             # Preserve the existing test and custom-router callback contract.
             result = router(session.id)
         else:
+            # Never send a recorded mock payment to a live MikroTik router.
+            authenticator = get_access_authenticator()
+            payment_origin = session.payment.raw_callback
+
+            if (
+                isinstance(authenticator, MikroTikAuthenticator)
+                and isinstance(payment_origin, dict)
+                and payment_origin.get("mock") is True
+            ):
+                raise RuntimeError(
+                    "Mock payment cannot activate access on a live MikroTik router"
+                )
+
             result = activate_access_device(
                 mac_address=session.device_mac_address,
                 ip_address=session.device_ip_address,

@@ -156,6 +156,221 @@ def activate_hotspot_device(
 
     api = connect_router()
 
+    rollback_state = {
+        "user_snapshot": None,
+        "user_id": None,
+        "profile_snapshot": None,
+        "profile_id": None,
+        "profile_name": None,
+        "new_session_ids": [],
+        "unidentified_new_session": False,
+        # RouterOS may complete authentication after our polling deadline.
+        # Until a session is observed and identified, cleanup is unsafe.
+        "authentication_outcome_uncertain": False,
+        "unidentified_new_profile": False,
+        "unidentified_new_user": False,
+    }
+
+    def rollback_router_changes():
+        errors = []
+        authentication_outcome_uncertain = rollback_state[
+            "authentication_outcome_uncertain"
+        ]
+        session_rollback_failed = (
+            rollback_state["unidentified_new_session"]
+            or authentication_outcome_uncertain
+        )
+
+        if rollback_state["unidentified_new_session"]:
+            errors.append(
+                "A newly created Hotspot session has no RouterOS ID; "
+                "it could not be safely removed"
+            )
+
+        if authentication_outcome_uncertain:
+            errors.append(
+                "Hotspot authentication was attempted but not confirmed; "
+                "user configuration and the new speed profile were preserved "
+                "because RouterOS may complete authentication after the timeout"
+            )
+
+        if rollback_state["new_session_ids"]:
+            try:
+                active_path = api.path("ip", "hotspot", "active")
+            except Exception as exc:
+                active_path = None
+                session_rollback_failed = True
+                errors.append(
+                    f"Could not access active Hotspot sessions during rollback: {exc}"
+                )
+
+            if active_path is not None:
+                for session_id in rollback_state["new_session_ids"]:
+                    try:
+                        active_path.remove(session_id)
+                    except Exception as exc:
+                        session_rollback_failed = True
+                        errors.append(
+                            f"New Hotspot session rollback failed "
+                            f"for {session_id}: {exc}"
+                        )
+
+                try:
+                    remaining_session_ids = {
+                        session.get(".id")
+                        for session in list(active_path)
+                    }
+                    remaining = [
+                        session_id
+                        for session_id in rollback_state["new_session_ids"]
+                        if session_id in remaining_session_ids
+                    ]
+
+                    if remaining:
+                        session_rollback_failed = True
+                        errors.append(
+                            "New Hotspot session(s) still exist after "
+                            "rollback removal: "
+                            + ", ".join(remaining)
+                        )
+                except Exception as exc:
+                    session_rollback_failed = True
+                    errors.append(
+                        f"Could not verify Hotspot session removal: {exc}"
+                    )
+
+        # Check for replacement sessions using a different RouterOS ID.
+        if rollback_state["new_session_ids"] and not session_rollback_failed:
+            try:
+                remaining_matching_sessions = [
+                    session
+                    for session in list(
+                        api.path("ip", "hotspot", "active")
+                    )
+                    if session.get("user", "").upper() == mac
+                    and session.get("server") == server_name
+                ]
+
+                if remaining_matching_sessions:
+                    session_rollback_failed = True
+                    errors.append(
+                        "A matching Hotspot session remains active after "
+                        "rollback; user configuration was preserved"
+                    )
+
+            except Exception as exc:
+                session_rollback_failed = True
+                errors.append(
+                    "Could not verify that all matching Hotspot sessions "
+                    f"were removed: {exc}"
+                )
+
+        if rollback_state["unidentified_new_user"]:
+            errors.append(
+                "A newly created Hotspot user has no RouterOS ID; "
+                "it was preserved because it could not be safely removed"
+            )
+
+        if session_rollback_failed:
+            errors.append(
+                "Hotspot user configuration was preserved because "
+                "session cleanup could not be confirmed"
+            )
+        elif not rollback_state["unidentified_new_user"]:
+            try:
+                user_path = api.path("ip", "hotspot", "user")
+                snapshot = rollback_state["user_snapshot"]
+
+                if snapshot is not None:
+                    user_id = snapshot.get(".id")
+                    if not user_id:
+                        raise RuntimeError(
+                            "Existing Hotspot user has no RouterOS ID"
+                        )
+
+                    restore = {
+                        ".id": user_id,
+                        **{
+                            key: snapshot[key]
+                            for key in ("profile", "server", "disabled")
+                            if key in snapshot
+                        },
+                    }
+                    user_path.update(**restore)
+
+                elif rollback_state["user_id"]:
+                    user_path.remove(rollback_state["user_id"])
+
+            except Exception as exc:
+                errors.append(f"Hotspot user rollback failed: {exc}")
+
+        try:
+            profile_path = api.path(
+                "ip", "hotspot", "user", "profile"
+            )
+            snapshot = rollback_state["profile_snapshot"]
+
+            if rollback_state["unidentified_new_profile"]:
+                errors.append(
+                    "A newly created speed profile has no RouterOS ID; "
+                    "it was preserved because it could not be safely removed"
+                )
+
+            if rollback_state["profile_id"]:
+                profile_name = rollback_state["profile_name"]
+
+                # Preserve the profile if a session or unidentified user
+                # may still depend on it.
+                profile_in_use = (
+                    session_rollback_failed
+                    or rollback_state["unidentified_new_user"]
+                )
+
+                if not profile_in_use:
+                    current_users = list(
+                        api.path("ip", "hotspot", "user")
+                    )
+
+                    profile_in_use = any(
+                        user.get("profile") == profile_name
+                        for user in current_users
+                    )
+
+                if not profile_in_use:
+                    current_users = list(
+                        api.path("ip", "hotspot", "user")
+                    )
+                    users_by_name = {
+                        user.get("name", "").upper(): user
+                        for user in current_users
+                        if user.get("name")
+                    }
+                    active_sessions = list(
+                        api.path("ip", "hotspot", "active")
+                    )
+
+                    for session in active_sessions:
+                        username = session.get("user", "").upper()
+                        session_user = users_by_name.get(username)
+
+                        # An unmatchable session makes profile usage
+                        # uncertain, so do not delete the profile.
+                        if session_user is None:
+                            profile_in_use = True
+                            break
+
+                        if session_user.get("profile") == profile_name:
+                            profile_in_use = True
+                            break
+
+                if not profile_in_use:
+                    profile_path.remove(rollback_state["profile_id"])
+
+        except Exception as exc:
+            errors.append(f"Speed profile rollback failed: {exc}")
+
+        return errors
+
     try:
         # Confirm that we are connected to the intended router.
         identities = list(api.path("system", "identity"))
@@ -189,18 +404,40 @@ def activate_hotspot_device(
                 "WEZA Hotspot server has no identifiable server name"
             )
 
+        # Capture existing sessions before modifying the Hotspot user.
+        active_path = api.path("ip", "hotspot", "active")
+        preexisting_sessions = [
+            device for device in list(active_path)
+            if device.get("user", "").upper() == mac
+            and device.get("server") == server_name
+        ]
+
+        if len(preexisting_sessions) > 1:
+            raise RouterActivationError(
+                "Multiple active sessions found for this device"
+            )
+
+        preexisting_session_ids = set()
+        for device in preexisting_sessions:
+            session_id = device.get(".id")
+            if not session_id:
+                raise RouterActivationError(
+                    "Cannot safely reauthenticate without a RouterOS session ID"
+                )
+            preexisting_session_ids.add(session_id)
+
         # RouterOS rate-limit order is upload/download.
         rate_limit = f"{upload_speed}M/{download_speed}M"
         speed_profile_name = (
             f"WEZA-{upload_speed}M-{download_speed}M"
         )
+        rollback_state["profile_name"] = speed_profile_name
 
         profile_path = api.path("ip", "hotspot", "user", "profile")
         profiles = list(profile_path)
 
         matching_profiles = [
-            profile
-            for profile in profiles
+            profile for profile in profiles
             if profile.get("name") == speed_profile_name
         ]
 
@@ -209,29 +446,10 @@ def activate_hotspot_device(
                 "Duplicate WEZA speed profiles found on MikroTik"
             )
 
-        if matching_profiles:
-            speed_profile = matching_profiles[0]
-
-            if speed_profile.get("rate-limit") != rate_limit:
-                profile_path.update(
-                    **{
-                        ".id": speed_profile[".id"],
-                        "rate-limit": rate_limit,
-                    }
-                )
-        else:
-            profile_path.add(
-                name=speed_profile_name,
-                **{"rate-limit": rate_limit},
-            )
-
-        # Create or update the Hotspot user identified by the device MAC.
         user_path = api.path("ip", "hotspot", "user")
         users = list(user_path)
-
         matching_users = [
-            user
-            for user in users
+            user for user in users
             if user.get("name", "").upper() == mac
         ]
 
@@ -240,56 +458,173 @@ def activate_hotspot_device(
                 "Duplicate Hotspot users found for this device MAC"
             )
 
-        if matching_users:
+        if preexisting_sessions:
+            # Idempotent retry: verify existing resources without modifying them.
+            if len(matching_profiles) != 1:
+                raise RouterActivationError(
+                    "Active device has no unique matching WEZA speed profile"
+                )
+
+            speed_profile = matching_profiles[0]
+            if speed_profile.get("rate-limit") != rate_limit:
+                raise RouterActivationError(
+                    "Active device speed profile does not match the package"
+                )
+
+            if len(matching_users) != 1:
+                raise RouterActivationError(
+                    "Active device has no unique Hotspot user"
+                )
+
             hotspot_user = matching_users[0]
+            if (
+                hotspot_user.get("profile") != speed_profile_name
+                or hotspot_user.get("server") != server_name
+                or hotspot_user.get("disabled") == "true"
+            ):
+                raise RouterActivationError(
+                    "Active device Hotspot user does not match the package"
+                )
 
-            user_path.update(
-                **{
-                    ".id": hotspot_user[".id"],
-                    "profile": speed_profile_name,
-                    "server": server_name,
-                    "disabled": "no",
-                }
-            )
-        else:
-            user_path.add(
-                name=mac,
-                profile=speed_profile_name,
-                server=server_name,
-                disabled="no",
-            )
-
-        # Allow RouterOS time to authenticate the device through MAC login.
-        authentication_deadline = time.monotonic() + 5
-        matching_active_devices = []
-
-        while time.monotonic() < authentication_deadline:
-            active_devices = list(api.path("ip", "hotspot", "active"))
-
-            matching_active_devices = [
-                device
-                for device in active_devices
-                if device.get("user", "").upper() == mac
-                and device.get("server") == server_name
-            ]
+            existing_ip = preexisting_sessions[0].get("address")
+            if not existing_ip:
+                raise RouterActivationError(
+                    "Existing active session has no IP address"
+                )
 
             if ip_address:
+                try:
+                    expected_ip = ipaddress.ip_address(ip_address)
+                    actual_ip = ipaddress.ip_address(existing_ip)
+                except ValueError as exc:
+                    raise RouterActivationError(
+                        "Invalid IP address supplied for active device"
+                    ) from exc
+
+                if actual_ip != expected_ip:
+                    raise RouterActivationError(
+                        "Existing active session IP does not match the device"
+                    )
+
+            matching_active_devices = preexisting_sessions
+
+        else:
+            # Only a device without an active session can enter this path.
+            if matching_profiles:
+                speed_profile = matching_profiles[0]
+                if speed_profile.get("rate-limit") != rate_limit:
+                    raise RouterActivationError(
+                        "Existing speed profile rate limit does not match "
+                        "the purchased package; existing profiles are immutable"
+                    )
+            else:
+                rollback_state["profile_id"] = profile_path.add(
+                    name=speed_profile_name,
+                    **{"rate-limit": rate_limit},
+                )
+                if not rollback_state["profile_id"]:
+                    rollback_state["unidentified_new_profile"] = True
+                    raise RouterActivationError(
+                        "Could not identify the newly created speed profile"
+                    )
+
+            if matching_users:
+                hotspot_user = matching_users[0]
+                rollback_state["user_snapshot"] = dict(hotspot_user)
+
+                # Updating/enabling this user can trigger authentication
+                # immediately. Keep rollback conservative until RouterOS
+                # exposes a trackable active session.
+                rollback_state["authentication_outcome_uncertain"] = True
+                user_path.update(
+                    **{
+                        ".id": hotspot_user[".id"],
+                        "profile": speed_profile_name,
+                        "server": server_name,
+                        "disabled": "no",
+                    }
+                )
+            else:
+                # A new user can authenticate as soon as it is created.
+                rollback_state["authentication_outcome_uncertain"] = True
+                rollback_state["user_id"] = user_path.add(
+                    name=mac,
+                    profile=speed_profile_name,
+                    server=server_name,
+                    disabled="no",
+                )
+                if not rollback_state["user_id"]:
+                    rollback_state["unidentified_new_user"] = True
+                    raise RouterActivationError(
+                        "Could not identify the newly created Hotspot user"
+                    )
+
+            # Wait for RouterOS to authenticate the device.
+            authentication_deadline = time.monotonic() + 5
+            matching_active_devices = []
+
+            while time.monotonic() < authentication_deadline:
+                active_devices = list(active_path)
+
                 matching_active_devices = [
-                    device
-                    for device in matching_active_devices
-                    if device.get("address") == ip_address
+                    device for device in active_devices
+                    if device.get("user", "").upper() == mac
+                    and device.get("server") == server_name
                 ]
 
-            if len(matching_active_devices) == 1:
-                break
+                # Record every newly created session before IP filtering
+                # or session-count validation, so rollback can remove it.
+                all_matching_sessions_identified = bool(
+                    matching_active_devices
+                )
+                for device in matching_active_devices:
+                    session_id = device.get(".id")
 
-            time.sleep(0.25)
+                    if not session_id:
+                        all_matching_sessions_identified = False
+                        if not preexisting_session_ids:
+                            rollback_state["unidentified_new_session"] = True
+                        continue
 
-        if len(matching_active_devices) != 1:
-            raise RouterActivationError(
-                "Hotspot user was configured, but RouterOS did not "
-                "confirm exactly one active session within 5 seconds"
-            )
+                    if (
+                        session_id not in preexisting_session_ids
+                        and session_id not in rollback_state["new_session_ids"]
+                    ):
+                        rollback_state["new_session_ids"].append(session_id)
+
+                if all_matching_sessions_identified:
+                    rollback_state["authentication_outcome_uncertain"] = False
+
+                if len(matching_active_devices) > 1:
+                    raise RouterActivationError(
+                        "RouterOS confirmed multiple active Hotspot sessions "
+                        "for this device"
+                    )
+
+                if len(matching_active_devices) == 1:
+                    if (
+                        ip_address
+                        and matching_active_devices[0].get("address")
+                        != ip_address
+                    ):
+                        raise RouterActivationError(
+                            "Authenticated Hotspot session IP does not "
+                            "match the device"
+                        )
+                    break
+
+                time.sleep(0.25)
+
+            if len(matching_active_devices) != 1:
+                raise RouterActivationError(
+                    "Hotspot user was configured, but RouterOS did not "
+                    "confirm exactly one active session within 5 seconds"
+                )
+
+            if not matching_active_devices[0].get(".id"):
+                raise RouterActivationError(
+                    "Authenticated Hotspot session has no RouterOS ID"
+                )
 
         # Verify the user is assigned the expected speed profile.
         verified_users = [
@@ -388,6 +723,17 @@ def activate_hotspot_device(
             "upload_speed_mbps": upload_speed,
             "rate_limit": rate_limit,
         }
+
+    except Exception as activation_error:
+        rollback_errors = rollback_router_changes()
+
+        if rollback_errors:
+            raise RouterActivationError(
+                f"Activation failed: {activation_error}. "
+                f"Rollback also failed: {'; '.join(rollback_errors)}"
+            ) from activation_error
+
+        raise
 
     finally:
         api.close()

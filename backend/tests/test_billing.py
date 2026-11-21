@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Payment
+from app.models import ActivationAttempt, Payment
 from app.services.mock_payment import process_mock_payment
 from app.services.payment_service import apply_payment_result, create_payment
 from app.services.purchase_service import create_purchase
@@ -86,3 +86,57 @@ def test_mock_purchase_payment_and_activation(client, user, package):
     assert active.json()["started_at"] and active.json()["expires_at"]
     assert client.post(f"{path}/activate").json() == active.json()
     assert client.get(path).json() == active.json()
+
+
+def test_package_writes_require_mock_mode(client, monkeypatch):
+    monkeypatch.delenv("ENABLE_MOCK_PAYMENTS", raising=False)
+    payload = {
+        "name": "Demo", "service_type": "hotspot", "price": 20,
+        "duration_minutes": 60, "download_speed_mbps": 5, "upload_speed_mbps": 2,
+    }
+    assert client.post("/api/packages/", json=payload).status_code == 404
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
+    assert client.post("/api/packages/", json={**payload, "duration_minutes": 0}).status_code == 422
+    created = client.post("/api/packages/", json=payload)
+    assert created.status_code == 200
+    assert client.delete(f"/api/packages/{created.json()['id']}").status_code == 200
+    assert client.get("/api/packages/").json() == []
+
+
+def test_mock_payment_is_rejected_before_mikrotik_activation(
+    db, user, package, monkeypatch
+):
+    import app.services.session_service as session_service
+
+    monkeypatch.setenv("ROUTER_MODE", "mikrotik")
+
+    provider_called = False
+
+    def unexpected_router_call(**kwargs):
+        nonlocal provider_called
+        provider_called = True
+        raise AssertionError("MikroTik provider must not be called for mock payment")
+
+    monkeypatch.setattr(
+        session_service, "activate_access_device", unexpected_router_call
+    )
+
+    payment = paid_payment(db, user, package)
+    assert payment.raw_callback == {"mock": True}
+
+    session = create_session(db, payment.id)
+    result = activate_session(db, session.id)
+
+    assert provider_called is False
+    assert result.status == "FAILED"
+    assert result.activation_status == "failed"
+    assert "Mock payment cannot activate access" in result.failure_reason
+
+    attempt = (
+        db.query(ActivationAttempt)
+        .filter_by(session_id=session.id)
+        .one()
+    )
+    assert attempt.status == "failed"
+    assert "Mock payment cannot activate access" in attempt.error_message
+    assert attempt.completed_at is not None
