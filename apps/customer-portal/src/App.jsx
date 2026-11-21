@@ -1,3 +1,4 @@
+
 import { Navigate, Route, Routes } from 'react-router-dom'
 import CustomerLayout from './components/layout/CustomerLayout'
 
@@ -14,6 +15,9 @@ import Usage from './pages/Usage'
 import Welcome from './pages/Welcome'
 import PackageExpired from './pages/PackageExpired'
 
+import PaymentStatus from './components/payments/PaymentStatus'
+import ConnectionStatus from './pages/ConnectionStatus'
+
 export default function App() {
   return (
     <Routes>
@@ -23,6 +27,9 @@ export default function App() {
       <Route path="/support" element={<Support />} />
       <Route path="/package-expired" element={<PackageExpired />} />
       <Route path="/hotspot-entry" element={<HotspotEntry />} />
+
+      <Route path="/payment-status" element={<PaymentStatus />} />
+      <Route path="/connection-status" element={<ConnectionStatus />} />
 
       <Route element={<CustomerLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
