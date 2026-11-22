@@ -5,6 +5,7 @@ request against them and answers HTTP 422 before any payment code runs.
 """
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -35,3 +36,20 @@ class PaymentRequest(BaseModel):
         if match is None:
             raise ValueError("Enter a valid Safaricom mobile number, e.g. 0712345678.")
         return f"254{match.group(1)}"
+
+
+
+class PaymentInitiated(BaseModel):
+    """Response when Daraja accepted the push and the customer was prompted.
+
+    "pending" is the only possible status here: Daraja ACCEPTING the request
+    does not mean the customer paid. The portal polls the payment until a
+    verified callback or status query settles it. There is deliberately no
+    phone number in this response.
+    """
+
+    payment_id: int
+    purchase_id: int
+    amount: int  # whole shillings, from our own database
+    status: Literal["pending"]
+    message: str
