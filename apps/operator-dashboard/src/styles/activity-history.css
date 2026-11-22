@@ -1,0 +1,63 @@
+.audit-page,
+.audit-drawer {
+  --audit-surface: var(--color-surface, #fff);
+  --audit-soft: var(--color-surface-muted, #f4f4f2);
+  --audit-text: var(--color-text, #1e1e24);
+  --audit-muted: var(--color-text-muted, #5f5f66);
+  --audit-accent: var(--color-accent, #d4e839);
+  color: var(--audit-text);
+}
+.audit-page { display: grid; min-width: 0; gap: 16px; font-size: 14px; }
+.audit-page .audit-heading { flex-wrap: wrap; margin-bottom: 0; }
+.audit-page p,
+.audit-drawer p { margin: 4px 0 0; color: var(--audit-muted); line-height: 1.45; }
+.audit-page .audit-eyebrow { color: #585175; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.audit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.audit-page button,
+.audit-page input,
+.audit-page select,
+.audit-drawer button { min-height: 36px; max-width: 100%; padding: 7px 12px; border: 1px solid #e2e2df; border-radius: 8px; background: var(--audit-soft); color: inherit; font: inherit; }
+.audit-page button,
+.audit-drawer button { border-radius: 999px; font-weight: 600; cursor: pointer; }
+.audit-page .audit-back { justify-self: start; }
+.audit-page .audit-primary,
+.audit-drawer .audit-primary { background: var(--audit-accent); }
+.audit-page button:disabled { opacity: .55; cursor: default; }
+.audit-page :focus-visible,
+.audit-drawer :focus-visible { outline: 2px solid #746d97; outline-offset: 2px; }
+.audit-panel { min-width: 0; border-radius: 12px; background: var(--audit-surface); box-shadow: var(--shadow-card, 0 3px 12px rgb(31 27 43 / 6%)); }
+.audit-filters,
+.audit-notice { padding: 16px; }
+.audit-filter-heading { justify-content: space-between; margin-bottom: 10px; }
+.audit-filters input { flex: 1 1 230px; min-width: 0; }
+.audit-table-panel { overflow: hidden; }
+.audit-table-scroll { overflow-x: auto; }
+.audit-table-panel table { width: 100%; min-width: 760px; border-collapse: collapse; text-align: left; }
+.audit-table-panel th,
+.audit-table-panel td { padding: 12px; border-bottom: 1px solid #ededeb; }
+.audit-table-panel thead th { background: var(--audit-soft); color: var(--audit-muted); font-size: 11px; text-transform: uppercase; }
+.audit-table-panel small { display: block; margin-top: 3px; color: var(--audit-muted); font-weight: 400; }
+.audit-page .audit-count { padding: 8px 14px; font-size: 12px; }
+.audit-result { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #eaf4b8; color: #35440d; font-size: 12px; font-weight: 650; }
+.audit-result[data-result="Failed"] { background: #feeceb; color: #98251d; }
+.audit-result[data-result="Logged"] { background: #ebebe9; color: #444; }
+.audit-result[data-result="Pending Router Response"] { background: #fff4e5; color: #754600; }
+.audit-notice { background: var(--audit-soft); }
+
+.audit-drawer { position: fixed; inset: 0 0 0 auto; width: min(480px, 100%); max-width: 100%; height: 100%; max-height: 100%; margin: 0; padding: 0; border: 0; background: var(--audit-surface); box-shadow: -8px 0 30px rgb(30 30 36 / 14%); }
+.audit-drawer::backdrop { background: rgb(30 30 36 / 24%); backdrop-filter: blur(2px); }
+.audit-drawer-layout { height: 100%; display: flex; flex-direction: column; }
+.audit-drawer-layout header,
+.audit-drawer-layout footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 16px 20px; background: var(--audit-soft); }
+.audit-drawer-layout h2 { margin: 0; font-size: 19px; }
+.audit-drawer-body { display: grid; align-content: start; flex: 1; min-height: 0; gap: 12px; padding: 16px; overflow-y: auto; overscroll-behavior: contain; font-size: 14px; }
+.audit-detail-card { padding: 14px; border-radius: 10px; background: var(--audit-soft); }
+.audit-detail-card h3 { margin: 0 0 8px; font-size: 13px; }
+.audit-detail-card dl { display: grid; gap: 8px; margin: 0; }
+.audit-detail-card dl div { display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; }
+.audit-detail-card dt { color: var(--audit-muted); }
+.audit-detail-card dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.audit-detail-card summary { cursor: pointer; font-weight: 600; }
+.audit-detail-card pre { overflow: auto; margin: 10px 0 0; padding: 12px; border-radius: 8px; background: #2c2d2d; color: #fff; font-size: 12px; }
+.audit-trace { display: grid; gap: 10px; margin: 0; padding-left: 20px; }
+.audit-trace li::marker { color: #746d97; }

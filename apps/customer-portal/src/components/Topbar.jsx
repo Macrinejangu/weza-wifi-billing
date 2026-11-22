@@ -1,5 +1,4 @@
-
-
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { Wifi } from 'lucide-react'
 
 export default function Topbar() {
@@ -25,16 +24,17 @@ export default function Topbar() {
 
       </div>
 
-      {/* Preview status */}
-      <div className="flex items-center gap-3 rounded-full bg-white px-5 py-3 shrink-0">
+      {demoDataEnabled && (
+        <div className="flex items-center gap-3 rounded-full bg-white px-5 py-3 shrink-0">
 
-        <span className="w-3 h-3 rounded-full bg-[#D9E52E]"></span>
+          <span className="w-3 h-3 rounded-full bg-[#D9E52E]"></span>
 
-        <span className="text-sm text-[#17152D]">
-          Portal preview
-        </span>
+          <span className="text-sm text-[#17152D]">
+            Portal preview
+          </span>
 
-      </div>
+        </div>
+      )}
 
     </header>
   )

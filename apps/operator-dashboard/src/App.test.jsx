@@ -1,11 +1,23 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import App from './App.jsx'
+import StaffProfilePage from './pages/StaffProfilePage.jsx'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage from './pages/CustomersPage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
+import PaymentsPage from './pages/PaymentsPage.jsx'
+import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
+import ActivityHistoryPage from './pages/ActivityHistoryPage.jsx'
+import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
+import NetworkDevicesPage from './pages/NetworkDevicesPage.jsx'
+import SessionsPage from './pages/SessionsPage.jsx'
 import { developmentOperator } from './operatorIdentity.js'
+
+vi.hoisted(() => {
+  vi.stubEnv('DEV', true)
+  vi.stubEnv('VITE_USE_DEMO_DATA', 'true')
+})
 
 test('renders the operator dashboard shell', () => {
   const html = renderToStaticMarkup(<DashboardLayout operator={developmentOperator}><DashboardPage operator={developmentOperator} /></DashboardLayout>)
@@ -105,7 +117,7 @@ test('provides an accessible control for opening NOC support', () => {
   expect(html).toContain('type="button"')
 })
 
-test('disables navigation destinations that are not implemented', () => {
+test('renders enabled dashboard destinations', () => {
   const html = renderToStaticMarkup(
     <DashboardLayout operator={developmentOperator}>
       <DashboardPage operator={developmentOperator} />
@@ -115,7 +127,8 @@ test('disables navigation destinations that are not implemented', () => {
 
   expect(navigation).toContain('aria-current="page"')
   expect(navigation).toContain('Customers')
-  expect((navigation.match(/disabled=""/g) ?? []).length).toBe(5)
+  expect(navigation).toContain('Settings')
+  expect(navigation).not.toContain('disabled=""')
   expect(navigation).not.toContain('href="#"')
 })
 
@@ -186,4 +199,103 @@ test('renders package status and type filters with counts derived from the demo 
   expect(html).toContain('Inactive (1)')
   expect(html).toContain('Hotspot Captive')
   expect(html).toContain('Home Fiber')
+})
+
+test('renders active session monitoring with illustrative KPI data', () => {
+  const html = renderToStaticMarkup(<SessionsPage />)
+
+  expect(html).toContain('Active Sessions')
+  expect(html).toContain('DEMO MODE')
+  expect(html).toContain('NOT CONNECTED')
+  expect(html).toContain('Expiring Soon')
+  expect(html).toContain('Failed Activations')
+  expect(html).toContain('<strong>1,248</strong>')
+  expect(html).toContain('<strong>18</strong>')
+  expect(html).toContain('<strong>2</strong>')
+  expect(html).toContain('Amina Wanjiku')
+  expect(html).toContain('John Kariuki')
+  expect(html).toContain('Brenda Mutua')
+  expect(html).toContain('David Kipchirchir')
+  expect(html).toContain('Esther Kemboi')
+  expect(html).toContain('Illustrative')
+})
+
+test('renders session search, filters and inspection controls', () => {
+  const html = renderToStaticMarkup(<SessionsPage />)
+
+  expect(html).toContain('Search sessions')
+  expect(html).toContain('Voucher')
+  expect(html).toContain('Monthly / SME')
+  expect(html).toContain('Active Authentications')
+  expect(html).toContain('Connection status')
+  expect(html).toContain('Expiry time')
+  expect(html).toContain('Fixed snapshot')
+  expect(html).toContain('aria-label="Inspect session for Amina Wanjiku"')
+  expect(html).toContain('Page 1 of 1')
+})
+
+
+test('renders the Payments preview with separate settlement and access statuses', () => {
+  const html = renderToStaticMarkup(<PaymentsPage />)
+
+  expect(html).toContain('KES 142,850')
+  expect(html).toContain('Demo data')
+  expect(html).toContain('Search payments')
+  expect(html).toContain('Filter payments by package')
+
+  const transaction = html.match(/<tr><th[^>]*>RJ92MN38X2<\/th>[\s\S]*?<\/tr>/)?.[0]
+  expect(transaction).toContain('Confirmed')
+  expect(transaction).toContain('Activation Failed')
+  expect(transaction).toContain('Inspect payment for Dennis Kiprono')
+})
+
+
+test('renders the demo incident list and opens the linked payment incident by ID', () => {
+  const list = renderToStaticMarkup(<ConnectionIssuesPage />)
+  const detail = renderToStaticMarkup(<ConnectionIssuesPage initialIssueId="ISS-4091" />)
+
+  expect(list).toContain('Search connection issues')
+  expect(list).toContain('ISS-4091')
+  expect(detail).toContain('Router CoA Timeout')
+  expect(detail).toContain('RJ92MN38X2')
+  expect(detail).toContain('Activation Failed')
+})
+
+
+test('renders the demo equipment inventory and named device inspection controls', () => {
+  const html = renderToStaticMarkup(<NetworkDevicesPage />)
+
+  expect(html).toContain('Equipment Inventory')
+  expect(html).toContain('Filter by sector')
+  expect(html).toContain('Needs Attention First')
+  expect(html).toContain('aria-label="View device AP-Westlands-02"')
+})
+
+
+test('renders the demo settings sections and local save control', () => {
+  const html = renderToStaticMarkup(<SystemSettingsPage />)
+
+  expect(html).toContain('General Preferences')
+  expect(html).toContain('Integration Status')
+  expect(html).toContain('Staff Access &amp; Operator Roles')
+  expect(html).toContain('Save Changes')
+})
+
+
+test('renders the demo audit log with filters and named event inspection controls', () => {
+  const html = renderToStaticMarkup(<ActivityHistoryPage />)
+
+  expect(html).toContain('Activity &amp; Audit History')
+  expect(html).toContain('Search audit history')
+  expect(html).toContain('Inspect event EVT-89210')
+  expect(html).toContain('Pending Router Response')
+})
+
+test('renders the operator profile with sample session and security controls', () => {
+  const html = renderToStaticMarkup(<StaffProfilePage operator={developmentOperator} />)
+
+  expect(html).toContain('My Profile &amp; Security')
+  expect(html).toContain('Moses Lenkai')
+  expect(html).toContain('Active Console Sessions')
+  expect(html).toContain('Password changes require an authenticated staff account.')
 })

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
 import '../styles/login.css'
 
 export default function LoginPage({ onPreviewDashboard, operator }) {
@@ -162,7 +163,7 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
           </span>
         </button>
 
-        {import.meta.env.DEV && (
+        {demoDataEnabled && operator && (
           <button
             className="dashboard-preview-link"
             type="button"
@@ -173,7 +174,7 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
         )}
 
           <footer className="login-footer">
-          <p>Staff login preview</p>
+          <p>Staff sign-in is currently unavailable.</p>
         </footer>
       </section>
 
@@ -214,25 +215,29 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
               Account support details will appear here once confirmed by Weza.
             </p>
 
-            <div className="support-detail">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                call
-              </span>
-              <div>
-                <span>Dispatch extension</span>
-                <strong>#402 · Nairobi NOC</strong>
-              </div>
-            </div>
+            {demoDataEnabled && operator && (
+              <>
+                <div className="support-detail">
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    call
+                  </span>
+                  <div>
+                    <span>Dispatch extension</span>
+                    <strong>#402 · Nairobi NOC</strong>
+                  </div>
+                </div>
 
-            <div className="support-detail">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                badge
-              </span>
-              <div>
-                <span>Shift Duty Officer</span>
-                <strong>{operator.fullName} · Lead</strong>
-              </div>
-            </div>
+                <div className="support-detail">
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    badge
+                  </span>
+                  <div>
+                    <span>Shift Duty Officer</span>
+                    <strong>{operator.fullName} · Lead</strong>
+                  </div>
+                </div>
+              </>
+            )}
 
             <button
               className="support-dismiss"

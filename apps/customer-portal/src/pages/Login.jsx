@@ -8,7 +8,7 @@ export default function Login() {
   
   function handleLogin(event) {
     event.preventDefault()
-    setMessage('Sign-in is unavailable in this preview.')
+    setMessage('Sign-in is currently unavailable.')
   }
 
   return (

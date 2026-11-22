@@ -2,6 +2,8 @@ export default function Header({
   onMenuClick,
   mobileMenuOpen,
   operator,
+  onOpenProfile,
+  profileActive,
 }) {
   return (
     <header className="dashboard-header">
@@ -47,10 +49,10 @@ export default function Header({
           <span className="material-symbols-outlined">notifications</span>
         </button>
 
-        <div className="header-user">
-          <div className="operator-avatar">{operator.initials}</div>
+        <button type="button" className="header-user header-profile-button" aria-label="Open My Profile and Security" aria-current={profileActive ? 'page' : undefined} onClick={onOpenProfile}>
+          <span className="operator-avatar" aria-hidden="true">{operator.initials}</span>
           <span>{operator.displayName}</span>
-        </div>
+        </button>
       </div>
     </header>
   )

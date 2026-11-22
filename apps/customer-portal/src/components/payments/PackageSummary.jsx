@@ -57,7 +57,7 @@ export default function PackageSummary() {
           <div>
             <p className="text-xs text-gray-500">Duration</p>
             <p className="text-sm font-medium text-[#17152D]">
-              {formatDuration(selectedPackage.duration_minutes)}
+              {selectedPackage.duration ?? formatDuration(selectedPackage.duration_minutes)}
             </p>
           </div>
         </div>
@@ -67,7 +67,7 @@ export default function PackageSummary() {
           <div>
             <p className="text-xs text-gray-500">Service</p>
             <p className="text-sm font-medium text-[#17152D]">
-              {selectedPackage.service_type}
+              {selectedPackage.service_type ?? 'Demo package'}
             </p>
           </div>
         </div>
@@ -77,7 +77,9 @@ export default function PackageSummary() {
           <div>
             <p className="text-xs text-gray-500">Download</p>
             <p className="text-sm font-medium text-[#17152D]">
-              {selectedPackage.download_speed_mbps} Mbps
+              {selectedPackage.download_speed_mbps == null
+                ? selectedPackage.speed ?? 'Unavailable'
+                : `${selectedPackage.download_speed_mbps} Mbps`}
             </p>
           </div>
         </div>
@@ -87,7 +89,7 @@ export default function PackageSummary() {
           <div>
             <p className="text-xs text-gray-500">Upload</p>
             <p className="text-sm font-medium text-[#17152D]">
-              {selectedPackage.upload_speed_mbps} Mbps
+              {selectedPackage.upload_speed_mbps == null ? 'Unavailable' : `${selectedPackage.upload_speed_mbps} Mbps`}
             </p>
           </div>
         </div>
