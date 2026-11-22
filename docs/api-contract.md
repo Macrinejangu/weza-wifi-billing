@@ -23,8 +23,8 @@ Package creation, editing, and deactivation also require a bearer token from `PO
 | `POST /api/purchases` | Integer `user_id` and `package_id`. The `Idempotency-Key` header takes 8 to 100 characters. | 201 with `id`, `amount`, `package_name`, `duration_minutes` and `status`. Repeating the same request with the same key returns the existing purchase with 200. |
 | `POST /api/payments/mock` | Integer `purchase_id` and `phone_number` as `254` followed by nine digits. Optional boolean `successful` defaults to true. | 200 with `id`, `status` and nullable `mpesa_receipt_number`. |
 | `POST /api/sessions` | Integer `payment_id`. Optional `device_mac_address` and `device_ip_address`. | 201 with a session for the confirmed payment. |
-| `POST /api/sessions/{session_id}/activate` | Session ID in the path. | 200 with an active session and the timer timestamps. |
-| `GET /api/sessions/{session_id}` | Session ID in the path. | 200 with the session details. |
+| `POST /api/sessions/{session_id}/activate` | Session ID in the path. | 200 with an active session and the timer timestamps. | Staff login required.
+| `GET /api/sessions/{session_id}` | Session ID in the path. | 200 with the session details. | Staff login required.
 
 Session responses include `id`, `status`, `activation_status`, `failure_reason`, `started_at` and `expires_at`. See [session states](session-states.md) for transitions.
 
