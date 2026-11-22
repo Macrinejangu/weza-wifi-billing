@@ -7,9 +7,17 @@ class Out(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PurchaseIn(BaseModel):
+class CheckoutIn(BaseModel):
     user_id: int
     package_id: int
+
+
+class PurchaseIn(CheckoutIn):
+    device_reference: str | None = Field(default=None, max_length=2048)
+
+
+class DeviceReferenceOut(BaseModel):
+    device_reference: str
 
 
 class PurchaseOut(Out):

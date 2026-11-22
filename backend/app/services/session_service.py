@@ -26,6 +26,14 @@ def create_session(
     if payment.status != "successful":
         raise ValueError("Payment has not been confirmed")
 
+    purchase = payment.purchase
+    if purchase.device_mac_address:
+        if (mac is not None and mac != purchase.device_mac_address) or (
+            ip is not None and ip != purchase.device_ip_address
+        ):
+            raise ValueError("Session device does not match the purchase")
+        mac, ip = purchase.device_mac_address, purchase.device_ip_address
+
     session = db.query(WiFiSession).filter_by(payment_id=payment.id).first()
 
     if session is None:
@@ -98,6 +106,13 @@ def activate_session(
                 raise RuntimeError(
                     "Mock payment cannot activate access on a live MikroTik router"
                 )
+
+            if isinstance(authenticator, MikroTikAuthenticator) and (
+                not purchase.device_mac_address
+                or session.device_mac_address != purchase.device_mac_address
+                or session.device_ip_address != purchase.device_ip_address
+            ):
+                raise RuntimeError("Live activation requires a verified purchase device")
 
             result = activate_access_device(
                 mac_address=session.device_mac_address,
