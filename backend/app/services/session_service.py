@@ -9,6 +9,7 @@ from app.services.access_auth import (
     get_access_authenticator,
     MikroTikAuthenticator,
 )
+from app.services.router import RouterActivationUnconfirmed, activate_hotspot_device
 
 
 def create_session(
@@ -62,27 +63,42 @@ def activate_session(
     if session.activation_status == "succeeded":
         return session
 
-    if session.status not in ("PAYMENT_CONFIRMED", "FAILED"):
+    attempt = None
+    if session.status == "ACTIVATING":
+        attempt = max(session.attempts, key=lambda item: item.attempt_number, default=None)
+        if attempt is None or attempt.error_code != RouterActivationUnconfirmed.__name__:
+            raise ValueError("Cannot reconcile a session without an unconfirmed activation")
+    elif session.status not in ("PAYMENT_CONFIRMED", "FAILED"):
         raise ValueError(f"Cannot activate a session that is {session.status}")
 
     purchase = session.payment.purchase
+    reconciling = attempt is not None
 
-    now = datetime.now(timezone.utc)
-    attempt = ActivationAttempt(
-        session_id=session.id,
-        attempt_number=len(session.attempts) + 1,
-    )
-
-    session.status = "ACTIVATING"
-    session.activation_status = "waiting"
-    session.activation_requested_at = now
-    session.failure_reason = None
-
-    db.add(attempt)
-    db.flush()
+    if attempt is None:
+        attempt = ActivationAttempt(
+            session_id=session.id,
+            attempt_number=len(session.attempts) + 1,
+        )
+        session.status = "ACTIVATING"
+        session.activation_status = "waiting"
+        session.activation_requested_at = datetime.now(timezone.utc)
+        session.failure_reason = None
+        db.add(attempt)
+        db.flush()
 
     try:
-        if router is not None:
+        if reconciling:
+            if not isinstance(get_access_authenticator(), MikroTikAuthenticator):
+                raise RouterActivationUnconfirmed("Reconciliation requires MikroTik mode")
+
+            result = activate_hotspot_device(
+                mac_address=session.device_mac_address,
+                ip_address=session.device_ip_address,
+                download_speed_mbps=purchase.download_speed_mbps,
+                upload_speed_mbps=purchase.upload_speed_mbps,
+                verify_only=True,
+            )
+        elif router is not None:
             # Preserve the existing test and custom-router callback contract.
             result = router(session.id)
         else:
@@ -110,6 +126,12 @@ def activate_session(
             raise RuntimeError("Router did not confirm activation")
 
     except Exception as error:
+        if reconciling or isinstance(error, RouterActivationUnconfirmed):
+            attempt.error_code = RouterActivationUnconfirmed.__name__
+            attempt.error_message = str(error)[:255]
+            db.commit()
+            return session
+
         attempt.status = "failed"
         attempt.error_code = type(error).__name__
         attempt.error_message = str(error)[:255]
@@ -120,6 +142,8 @@ def activate_session(
 
     else:
         attempt.status = "succeeded"
+        attempt.error_code = None
+        attempt.error_message = None
 
         session.status = "ACTIVE"
         session.activation_status = "succeeded"

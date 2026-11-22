@@ -17,6 +17,10 @@ class RouterActivationError(RuntimeError):
     """Raised when MikroTik cannot safely activate a Hotspot device."""
 
 
+class RouterActivationUnconfirmed(RouterActivationError):
+    """RouterOS may still grant access after the activation call returned."""
+
+
 def connect_router():
     settings = router_settings()
 
@@ -130,6 +134,8 @@ def activate_hotspot_device(
     download_speed_mbps: int,
     upload_speed_mbps: int,
     ip_address: str | None = None,
+    *,
+    verify_only: bool = False,
 ) -> dict:
     """
     Authorize a device through MikroTik Hotspot MAC authentication.
@@ -411,6 +417,9 @@ def activate_hotspot_device(
             if device.get("user", "").upper() == mac
             and device.get("server") == server_name
         ]
+
+        if verify_only and not preexisting_sessions:
+            raise RouterActivationUnconfirmed("RouterOS has not confirmed an active session")
 
         if len(preexisting_sessions) > 1:
             raise RouterActivationError(
@@ -725,10 +734,20 @@ def activate_hotspot_device(
         }
 
     except Exception as activation_error:
+        if verify_only:
+            raise
+
         rollback_errors = rollback_router_changes()
 
         if rollback_errors:
-            raise RouterActivationError(
+            error_type = RouterActivationError
+            if (
+                rollback_state["authentication_outcome_uncertain"]
+                or rollback_state["unidentified_new_session"]
+                or rollback_state["new_session_ids"]
+            ):
+                error_type = RouterActivationUnconfirmed
+            raise error_type(
                 f"Activation failed: {activation_error}. "
                 f"Rollback also failed: {'; '.join(rollback_errors)}"
             ) from activation_error

@@ -306,7 +306,7 @@ def test_authentication_timeout_preserves_user_and_profile_for_late_auth(
     monkeypatch.setattr(router_service, "connect_router", lambda: api)
 
     with pytest.raises(
-        router_service.RouterActivationError
+        router_service.RouterActivationUnconfirmed
     ) as exc_info:
         router_service.activate_hotspot_device(
             "AA:BB:CC:DD:EE:FF", 5, 2
@@ -1189,3 +1189,36 @@ def test_empty_user_add_id_preserves_unidentified_user_and_profile(
     assert len(api.active_devices) == 1
     assert api.active_devices[0]["user"] == "AA:BB:CC:DD:EE:FF"
     assert api.closed is True
+
+
+def test_reconciliation_reads_only_and_verifies_late_speed_queue(
+    monkeypatch, router_settings
+):
+    mac = "AA:BB:CC:DD:EE:FF"
+    api = FakeAPI(active_devices=[])
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    with pytest.raises(router_service.RouterActivationUnconfirmed):
+        router_service.activate_hotspot_device(mac, 5, 2, verify_only=True)
+    users = api.paths[("ip", "hotspot", "user")]
+    profiles = api.paths[("ip", "hotspot", "user", "profile")]
+    assert users == []
+    assert profiles == []
+
+    profiles.append({"name": "WEZA-2M-5M", "rate-limit": "2M/5M"})
+    user = {
+        "name": mac,
+        "profile": "WEZA-2M-5M",
+        "server": "WEZA-Hotspot-Server",
+    }
+    users.append(user)
+    api._complete_authentication(user)
+    api.simple_queues[0]["max-limit"] = "1M/5M"
+    with pytest.raises(router_service.RouterActivationError, match="speed limit"):
+        router_service.activate_hotspot_device(mac, 5, 2, verify_only=True)
+
+    api.simple_queues[0]["max-limit"] = "2M/5M"
+    result = router_service.activate_hotspot_device(mac, 5, 2, verify_only=True)
+    assert result["status"] == "ACTIVE"
+    assert users == [user]
+    assert len(api.active_devices) == 1
