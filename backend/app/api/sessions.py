@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -15,10 +15,12 @@ def new_session(data: SessionIn, db: Session = Depends(get_db)):
 
 
 @router.post("/{session_id}/activate", response_model=SessionOut)
-def activate(session_id: int, db: Session = Depends(get_db)):
+def activate(session_id: int, response: Response, db: Session = Depends(get_db)):
     session = activate_session(db, session_id)
     if session.activation_status == "failed":
         raise HTTPException(502, f"Router activation failed: {session.failure_reason}")
+    if session.activation_status == "waiting":
+        response.status_code = 202
     return session
 
 

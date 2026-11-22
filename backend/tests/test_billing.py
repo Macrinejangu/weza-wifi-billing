@@ -169,3 +169,49 @@ def test_mock_payment_is_rejected_before_mikrotik_activation(
     assert attempt.status == "failed"
     assert "Mock payment cannot activate access" in attempt.error_message
     assert attempt.completed_at is not None
+
+
+def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
+    client, db, user, package, monkeypatch
+):
+    from app.services import session_service
+    from app.services.router import RouterActivationUnconfirmed
+
+    monkeypatch.setenv("ROUTER_MODE", "mikrotik")
+    payment = paid_payment(db, user, package)
+    payment.raw_callback = {"test": "verified payment fixture"}
+    db.commit()
+    session = create_session(db, payment.id, "AA:BB:CC:DD:EE:FF", "10.20.0.254")
+    calls = []
+
+    def activate_once(**kwargs):
+        calls.append("activate")
+        raise RouterActivationUnconfirmed("Router timed out")
+
+    def verify_only(**kwargs):
+        assert kwargs["verify_only"] is True
+        calls.append("verify")
+        if calls.count("verify") == 1:
+            raise RouterActivationUnconfirmed("Router has not confirmed the session")
+        return {"status": "ACTIVE"}
+
+    monkeypatch.setattr(session_service, "activate_access_device", activate_once)
+    monkeypatch.setattr(session_service, "activate_hotspot_device", verify_only)
+    endpoint = f"/api/sessions/{session.id}/activate"
+
+    for _ in range(2):
+        response = client.post(endpoint)
+        assert response.status_code == 202
+        assert response.json()["activation_status"] == "waiting"
+        assert response.json()["started_at"] is None
+
+    response = client.post(endpoint)
+    assert response.status_code == 200
+    assert response.json()["activation_status"] == "succeeded"
+    assert response.json()["started_at"] is not None
+    assert client.post(endpoint).status_code == 200
+    assert calls == ["activate", "verify", "verify"]
+
+    attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()
+    assert attempt.status == "succeeded"
+    assert attempt.completed_at is not None
