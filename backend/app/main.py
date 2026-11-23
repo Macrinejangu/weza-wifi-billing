@@ -13,6 +13,7 @@ from app.api.router import router as router_status_router
 from app.api.sessions import router as sessions_router
 from app.api.staff import router as staff_router
 
+from app.api.routes.customers import router as customers_router
 from app.api.routes.payments import router as mpesa_payments_router
 from app.api.routes.mpesa_callback import router as mpesa_callback_router
 
@@ -30,6 +31,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(staff_router)
+app.include_router(customers_router)
 app.include_router(mpesa_payments_router)
 app.include_router(mpesa_callback_router)
 app.include_router(router_status_router)
