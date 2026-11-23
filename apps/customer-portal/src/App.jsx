@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link, Navigate, Route, Routes } from 'react-router-dom'
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { demoDataEnabled } from '../../shared/demoMode.js'
-import PaymentStatus from './components/payments/PaymentStatus'
+import PaymentStatus, { CustomerPaymentStatus } from './components/payments/PaymentStatus'
 import ConnectionStatus from './pages/ConnectionStatus'
 import CustomerLayout from './components/layout/CustomerLayout'
 
@@ -42,6 +42,12 @@ function getTokenExpiry(accessToken) {
 }
 
 export default function App() {
+  const { state } = useLocation()
+  const returnPaymentId = state?.returnPaymentId
+  const signInDestination =
+    typeof returnPaymentId === 'string' && /^[1-9]\d{0,9}$/.test(returnPaymentId)
+      ? `/payment-status?payment=${returnPaymentId}`
+      : '/profile'
   const [customerSession, setCustomerSession] = useState(null)
   const expiresAt = customerSession?.expiresAt
 
@@ -68,7 +74,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Welcome />} />
-      <Route path="/login" element={customerSession ? <Navigate to="/profile" replace /> : <Login onSignIn={handleSignIn} />} />
+      <Route path="/login" element={customerSession ? <Navigate to={signInDestination} replace /> : <Login onSignIn={handleSignIn} />} />
       <Route path="/register" element={<Register />} />
       <Route path="/support" element={<Support />} />
       <Route
@@ -88,9 +94,9 @@ export default function App() {
         path="/payment-status"
         element={
           demoDataEnabled ? <PaymentStatus /> : (
-            <UnavailablePage
-              title="Payment status"
-              message="Live payment status is currently unavailable."
+            <CustomerPaymentStatus
+              accessToken={customerSession?.accessToken}
+              onSessionExpired={() => setCustomerSession(null)}
             />
           )
         }

@@ -221,3 +221,47 @@ test('reuses the purchase key after a retryable payment failure', async () => {
   expect(request.mock.calls[5][1].headers['Idempotency-Key']).toBe(firstKey)
   expect(container.querySelector('[role="status"]')?.textContent).toContain('pending confirmation')
 })
+
+test('opens the existing status screen and refreshes from pending to received', async () => {
+  await openCheckout()
+  mockPurchase()
+  request.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ purchase_id: 42, payment_id: 7, status: 'pending' }),
+  })
+  await submitPhone('0712345678')
+
+  const transaction = { id: 7, purchase_id: 42, package_name: 'Local Test Package', amount: 35 }
+  request.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ ...transaction, status: 'pending' }),
+  })
+  await act(async () => container.querySelector('a[href="/payment-status?payment=7"]').click())
+
+  expect(container.querySelector('h1')?.textContent).toBe('Check your phone')
+  expect(request).toHaveBeenLastCalledWith('/api/customer/payments/7', expect.objectContaining({
+    cache: 'no-store',
+    headers: expect.objectContaining({ Authorization: `Bearer ${token}` }),
+  }))
+  request.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ ...transaction, status: 'successful', mpesa_receipt_number: 'TEST123' }),
+  })
+  await act(async () => container.querySelector('button').click())
+
+  expect(container.querySelector('h1')?.textContent).toBe('Payment received')
+  expect(container.textContent).toContain('TEST123')
+  expect(request.mock.calls.filter(([url]) => url === '/api/payments')).toHaveLength(1)
+})
+
+test('requires sign-in before reading a payment status link', async () => {
+  await act(async () => {
+    root.render(
+      <MemoryRouter initialEntries={['/payment-status?payment=7']}>
+        <App />
+      </MemoryRouter>
+    )
+  })
+  expect(container.textContent).toContain('Sign in to check payment status')
+  expect(request).not.toHaveBeenCalled()
+})

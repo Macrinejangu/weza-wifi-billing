@@ -7,9 +7,11 @@ import {
   Smartphone,
   XCircle,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { demoDataEnabled } from '../../../../shared/demoMode.js'
 import { useCheckout } from '../../context/CheckoutContext'
+import { getCustomerPayment } from '../../services/api.js'
 
 const paymentViews = {
   pending: {
@@ -153,9 +155,78 @@ export default function PaymentStatus() {
       }
     : checkout.transaction
 
-  const view = Object.hasOwn(paymentViews, paymentStatus)
-    ? paymentViews[paymentStatus]
-    : paymentViews.unknown
+  return <PaymentStatusView {...{ paymentStatus, selectedPackage, transaction, isPreview }} />
+}
+
+export function CustomerPaymentStatus({ accessToken, onSessionExpired }) {
+  const [params] = useSearchParams()
+  const paymentId = params.get('payment')
+  if (!/^[1-9]\d{0,9}$/.test(paymentId ?? '') || Number(paymentId) > 2147483647) {
+    return <PaymentStatusView paymentStatus="not_started" />
+  }
+  if (!accessToken) return <SignInForPayment paymentId={paymentId} />
+
+  return <CustomerPaymentStatusCheck
+    key={paymentId}
+    accessToken={accessToken}
+    paymentId={paymentId}
+    onSessionExpired={onSessionExpired}
+  />
+}
+
+function SignInForPayment({ paymentId, onClick }) {
+  return (
+    <PaymentStatusView paymentStatus="unknown">
+      <Link to="/login" state={{ returnPaymentId: paymentId }} onClick={onClick} className={primaryAction}>
+        Sign in to check payment status
+      </Link>
+    </PaymentStatusView>
+  )
+}
+
+function CustomerPaymentStatusCheck({ accessToken, paymentId, onSessionExpired }) {
+  const [attempt, setAttempt] = useState(0)
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getCustomerPayment({ accessToken, paymentId, signal: controller.signal })
+      .then((transaction) => {
+        if (!controller.signal.aborted) setResult({ attempt, transaction })
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setResult({ attempt, error })
+      })
+    return () => controller.abort()
+  }, [accessToken, paymentId, attempt])
+
+  const loading = result?.attempt !== attempt
+  const transaction = result?.transaction
+  const error = result?.error
+  if (!loading && error?.status === 401) {
+    return <SignInForPayment paymentId={paymentId} onClick={onSessionExpired} />
+  }
+
+  const paymentStatus = transaction?.status ?? 'unknown'
+  const refreshable = loading || ['pending', 'expired', 'unknown'].includes(paymentStatus)
+  return (
+    <PaymentStatusView
+      paymentStatus={paymentStatus}
+      transaction={transaction}
+      isCustomerStatus
+      loading={loading}
+      onCheck={refreshable ? () => setAttempt((value) => value + 1) : undefined}
+    />
+  )
+}
+
+function PaymentStatusView({
+  paymentStatus, selectedPackage, transaction, isPreview, isCustomerStatus,
+  loading, onCheck, children,
+}) {
+  const view = loading && !transaction
+    ? { ...paymentViews.unknown, title: 'Checking payment status', description: 'Looking up your payment.' }
+    : Object.hasOwn(paymentViews, paymentStatus) ? paymentViews[paymentStatus] : paymentViews.unknown
 
   const Icon = view.icon
   const isPending = paymentStatus === 'pending'
@@ -203,29 +274,37 @@ export default function PaymentStatus() {
 
         {view.note && (
           <p className="mt-4 rounded-xl bg-[#f0eef6] p-4 text-left text-sm leading-relaxed text-[#47415e]">
-            {view.note}
+            {isCustomerStatus && isSuccessful
+              ? 'Your payment is confirmed. Please do not pay again for this purchase.'
+              : view.note}
           </p>
         )}
 
         <div className="mt-6 space-y-3">
-          {isPending && (
+          {children}
+          {(isPending || onCheck) && (
             <>
               <button
                 type="button"
-                disabled
-                aria-describedby="payment-check-help"
-                className={`${primaryAction} cursor-not-allowed bg-[#eeede9] text-[#57545f]`}
+                disabled={loading || !onCheck}
+                onClick={onCheck}
+                aria-describedby={!onCheck ? 'payment-check-help' : undefined}
+                className={onCheck
+                  ? `${primaryAction} disabled:cursor-not-allowed disabled:opacity-60`
+                  : `${primaryAction} cursor-not-allowed bg-[#eeede9] text-[#57545f]`}
               >
                 <RefreshCw aria-hidden="true" size={17} />
-                Check payment status
+                {loading ? 'Checking…' : 'Check payment status'}
               </button>
-              <p id="payment-check-help" className="text-xs text-[#57545f]">
-                Online payment status checks are unavailable.
-              </p>
+              {!onCheck && (
+                <p id="payment-check-help" className="text-xs text-[#57545f]">
+                  Online payment status checks are unavailable.
+                </p>
+              )}
             </>
           )}
 
-          {isSuccessful && !isPreview && (
+          {isSuccessful && !isPreview && !isCustomerStatus && (
             <Link to="/connection-status" className={primaryAction}>
               View connection status <ArrowRight aria-hidden="true" size={17} />
             </Link>

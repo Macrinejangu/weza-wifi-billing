@@ -32,6 +32,17 @@ Session responses include `id`, `status`, `activation_status`, `failure_reason`,
 
 Invalid input returns 422 with validation details. Missing records or inactive packages at purchase creation return 404 with a `detail` message. Reusing a purchase key for a different request, paying a non-pending purchase, or creating a session for an unconfirmed payment returns 400 with a `detail` message. A failed router simulation returns 502 and records the failed activation attempt.
 
+## Authenticated customer checkout
+
+- `POST /api/customer/purchases` requires a customer bearer token, an `Idempotency-Key`
+  header, and a JSON body with `package_id`. The server sets the owner from the token.
+  A new purchase returns 201. A repeat of the same request returns 200.
+- `GET /api/customer/payments/{payment_id}` requires a customer bearer token.
+  Returns the stored payment ID, purchase ID, status, amount, package name, and
+  M-Pesa receipt for confirmed payments. Missing payments and payments owned by
+  another customer both return 404. This endpoint does not contact Daraja and
+  remains available with payment initiation disabled.
+
 ## POST /api/payments
 
 Asks Daraja (sandbox) to send an M-Pesa prompt to the customer's phone for one purchase. Implemented in WEZA-49.
@@ -41,6 +52,8 @@ The route returns 404 by default. Set `ENABLE_DARAJA_SANDBOX_PAYMENTS=true` only
 **Accepted by Daraja does not mean paid.** A 201 only means the prompt was sent. The payment stays `pending` until a verified callback or status query settles it (WEZA-50).
 
 ### Request
+
+Send the customer bearer token in the Authorization header. The purchase must belong to that customer.
 
 ```json
 {"purchase_id": 12, "phone_number": "0712345678"}

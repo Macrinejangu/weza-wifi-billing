@@ -1,14 +1,16 @@
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import current_customer
 from app.core.security import create_device_reference, read_device_reference
 from app.db.session import get_db
-from app.models import User
+from app.models import Payment, Purchase, User
 from app.schemas.billing import (
-    CustomerCheckoutIn, CustomerPurchaseIn, CheckoutIn, DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
+    CheckoutIn, CustomerCheckoutIn, CustomerPaymentRead, CustomerPurchaseIn,
+    DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
 )
 from app.services.device_identity import (
     checkout_device_verification_enabled, resolve_hotspot_device, validate_client_ip,
@@ -112,6 +114,34 @@ def new_customer_purchase(
     return new_purchase(
         PurchaseIn(user_id=customer.id, **data.model_dump()),
         request, response, db, idempotency_key,
+    )
+
+
+@customer_router.get("/payments/{payment_id}", response_model=CustomerPaymentRead)
+def get_customer_payment(
+    payment_id: int, response: Response,
+    customer: User = Depends(current_customer),
+    db: Session = Depends(get_db),
+):
+    row = db.execute(
+        select(Payment, Purchase.package_name)
+        .join(Purchase, Payment.purchase_id == Purchase.id)
+        .where(Payment.id == payment_id, Purchase.user_id == customer.id)
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, "Payment not found")
+
+    payment, package_name = row
+    response.headers["Cache-Control"] = "no-store"
+    return CustomerPaymentRead(
+        id=payment.id,
+        purchase_id=payment.purchase_id,
+        status=payment.status,
+        amount=payment.amount,
+        package_name=package_name,
+        mpesa_receipt_number=(
+            payment.mpesa_receipt_number if payment.status == "successful" else None
+        ),
     )
 
 

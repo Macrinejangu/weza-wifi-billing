@@ -50,6 +50,15 @@ class PaymentOut(Out):
     mpesa_receipt_number: str | None
 
 
+class CustomerPaymentRead(BaseModel):
+    id: int
+    purchase_id: int
+    status: str
+    amount: int
+    package_name: str
+    mpesa_receipt_number: str | None
+
+
 class SessionIn(BaseModel):
     payment_id: int
     device_mac_address: str | None = Field(default=None, max_length=17)
