@@ -10,7 +10,7 @@ vi.hoisted(() => {
 test('keeps the staff preview disabled by default', () => {
   const html = renderToStaticMarkup(<App />)
 
-  expect(html).toContain('Staff sign-in is currently unavailable.')
+  expect(html).toContain('Staff Login')
   expect(html).not.toContain('Preview Dashboard')
   expect(html).not.toContain('Moses Lenkai')
 })

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getStaffProfile, signInStaff } from './api.js'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage, { initialCustomers } from './pages/CustomersPage.jsx'
@@ -15,7 +16,39 @@ import LoginPage from './pages/LoginPage.jsx'
 import { demoDataEnabled } from '../../shared/demoMode.js'
 import { developmentOperator } from './operatorIdentity.js'
 
+function getTokenExpiry(accessToken) {
+  try {
+    const payload = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(atob(payload))
+    return Number.isFinite(exp) ? exp * 1000 : 0
+  } catch {
+    return 0
+  }
+}
+
 export default function App() {
+  const [staffSession, setStaffSession] = useState(null)
+  const expiresAt = staffSession?.expiresAt
+
+  useEffect(() => {
+    if (!expiresAt) return undefined
+
+    const timeout = window.setTimeout(() => setStaffSession(null), Math.max(0, expiresAt - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [expiresAt])
+
+  async function handleSignIn(email, password) {
+    const accessToken = await signInStaff(email, password)
+    const staff = await getStaffProfile(accessToken)
+    const expiry = getTokenExpiry(accessToken)
+
+    if (expiry <= Date.now()) {
+      throw new Error('Your staff session is unavailable. Please sign in again.')
+    }
+
+    setStaffSession({ accessToken, staff, expiresAt: expiry })
+  }
+
   // This preview is for frontend review only; it does not create an authenticated session.
   const [showDashboardPreview, setShowDashboardPreview] = useState(false)
   const [activePage, setActivePage] = useState('overview')
@@ -53,6 +86,22 @@ export default function App() {
   function closePreview() {
     navigate('overview')
     setShowDashboardPreview(false)
+  }
+
+  if (staffSession) {
+    return (
+      <main className="login-page">
+        <section className="login-panel" aria-labelledby="operator-title">
+          <header className="login-heading">
+            <h1 id="operator-title">Operator dashboard</h1>
+            <p>Signed in as {staffSession.staff.full_name}.</p>
+          </header>
+          <button className="login-submit" type="button" onClick={() => setStaffSession(null)}>
+            Sign out
+          </button>
+        </section>
+      </main>
+    )
   }
 
   if (demoDataEnabled && showDashboardPreview) {
@@ -105,6 +154,7 @@ export default function App() {
 
   return (
     <LoginPage
+      onSignIn={handleSignIn}
       operator={demoDataEnabled ? developmentOperator : undefined}
       onPreviewDashboard={() => setShowDashboardPreview(true)}
     />

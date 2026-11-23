@@ -98,7 +98,7 @@ test('shows the staff login page by default', () => {
   const html = renderToStaticMarkup(<App />)
 
   expect(html).toContain('Staff Login')
-  expect(html).toContain('Staff Phone Number or ID')
+  expect(html).toContain('Staff email')
   expect(html).toContain('Sign In')
   expect(html).toContain('Forgot Password or Need Access?')
 })
