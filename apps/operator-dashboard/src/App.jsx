@@ -111,6 +111,8 @@ export default function App() {
           <PackagesPage live />
         ) : staffPage === 'customers' ? (
           <CustomersPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'network-devices' ? (
+          <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'staff-profile' ? (
           <StaffProfilePage operator={operator} staff={staff} onSignOut={signOut} />
         ) : (
