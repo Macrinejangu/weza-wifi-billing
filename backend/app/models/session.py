@@ -85,6 +85,8 @@ class WiFiSession(TimestampMixin, Base):
         unique=True,
     )
 
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id"), unique=True)
+
     device_mac_address = Column(String(17))
     device_ip_address = Column(String(45))
 
@@ -112,6 +114,7 @@ class WiFiSession(TimestampMixin, Base):
     ended_at = Column(DateTime(timezone=True))
 
     payment = relationship("Payment")
+    subscription = relationship("Subscription")
 
     attempts = relationship("ActivationAttempt")
 

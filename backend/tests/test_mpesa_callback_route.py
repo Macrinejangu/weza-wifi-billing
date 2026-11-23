@@ -6,6 +6,7 @@ policy and a fake Daraja. No network, no real configuration.
 
 import json
 import logging
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,7 +21,7 @@ from app.api.routes.mpesa_callback import (
 from app.api.routes.payments import get_daraja_client
 from app.db.session import get_db
 from app.main import app
-from app.models import Payment, PaymentEvent
+from app.models import ActivationAttempt, Payment, PaymentEvent, Subscription, WiFiSession
 from app.payments.callback_ip_policy import CallbackIpPolicy
 from app.payments.callback_security import CallbackSecurityPolicy
 from app.services.callback_processing import replay_callback
@@ -102,6 +103,33 @@ def test_duplicate_delivery_settles_once_and_queries_once(api, db, pending, dara
     assert [e.processing_status for e in events(db)] == ["applied", "duplicate"]
     assert daraja.calls == ["ws_CO_0001"]
     assert db.query(Payment).filter_by(status="successful").count() == 1
+    subscription = db.query(Subscription).filter_by(payment_id=payment.id).one()
+    session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
+    assert session.subscription_id == subscription.id
+    assert session.activation_status == "succeeded"
+    assert subscription.start_date == session.started_at == payment.paid_at
+    assert subscription.end_date == session.expires_at == payment.paid_at + timedelta(
+        minutes=payment.purchase.duration_minutes
+    )
+    assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
+
+
+def test_activation_failure_preserves_the_verified_payment(api, db, pending, monkeypatch):
+    _, payment = pending
+
+    def fail_activation(**kwargs):
+        raise RuntimeError("Mock router unavailable")
+
+    monkeypatch.setattr("app.services.session_service.activate_access_device", fail_activation)
+    assert post(api, json.dumps(body())).json() == ACCEPTED_REPLY
+    assert post(api, json.dumps(body())).json() == ACCEPTED_REPLY
+
+    db.expire_all()
+    assert payment.status == "successful"
+    session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
+    assert session.activation_status == "failed"
+    assert session.subscription.start_date == payment.paid_at
+    assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
 
 
 def test_wrong_token_gets_a_plain_404_and_leaves_no_audit_row(api, db, pending):
