@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.core.security import hash_password
+from app.core.security import create_token, hash_password
 from app.models import ActivationAttempt, Payment, User
 from app.services.mock_payment import process_mock_payment
 from app.services.payment_service import apply_payment_result, create_payment
@@ -11,10 +11,71 @@ from app.services.session_service import activate_session, create_session
 PHONE = "254712345678"
 
 
+def staff_headers(db, monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "x" * 40)
+    staff = User(full_name="Staff", email="session-staff@weza.local", password_hash="x", role="operator")
+    db.add(staff)
+    db.commit()
+    return {"Authorization": f"Bearer {create_token(staff.id)}"}
+
+
 def paid_payment(db, user, package, ok=True):
     purchase, _ = create_purchase(db, user.id, package.id, "key-12345")
     return process_mock_payment(db, create_payment(db, purchase.id, PHONE).id, ok)
 
+
+def test_checkout_binds_verified_device_to_session(db, user, package, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.api import billing
+    from app.db.session import get_db
+    from app.main import app
+    from app.models import Purchase
+
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
+    monkeypatch.setenv("ENABLE_DIRECT_HOTSPOT_CHECKOUT", "true")
+    monkeypatch.setenv("JWT_SECRET", "x" * 32)
+    monkeypatch.setitem(app.dependency_overrides, get_db, lambda: db)
+    mac = "8A:AA:52:95:B9:BB"
+    ip = "10.20.0.254"
+
+    def lookup(address):
+        assert address == ip
+        return mac
+
+    monkeypatch.setattr(billing, "resolve_hotspot_device", lookup)
+    checkout = {"user_id": user.id, "package_id": package.id}
+    headers = {"Idempotency-Key": "checkout-verified"}
+    with TestClient(app, client=(ip, 50000)) as hotspot:
+        reference_url = "/api/checkout/device-reference"
+        forwarded = hotspot.post(reference_url, json=checkout, headers={
+            **headers, "X-Forwarded-For": "10.20.0.253",
+        })
+        assert forwarded.status_code == 400
+        reference = hotspot.post(reference_url, json=checkout, headers=headers)
+        assert reference.status_code == 200
+        verified_checkout = {**checkout, **reference.json()}
+
+        for bad_checkout, bad_headers in (
+            ({**checkout, "device_reference": "unknown"}, headers),
+            (verified_checkout, {"Idempotency-Key": "another-checkout"}),
+        ):
+            rejected = hotspot.post("/api/purchases", json=bad_checkout, headers=bad_headers)
+            assert rejected.status_code == 400
+
+        purchased = hotspot.post("/api/purchases", json=verified_checkout, headers=headers)
+        assert purchased.status_code == 201
+        again = hotspot.post("/api/purchases", json=verified_checkout, headers=headers)
+        assert again.status_code == 200
+        assert again.json()["id"] == purchased.json()["id"]
+
+    purchase = db.get(Purchase, purchased.json()["id"])
+    assert (purchase.device_mac_address, purchase.device_ip_address) == (mac, ip)
+    payment = process_mock_payment(db, create_payment(db, purchase.id, PHONE).id)
+    with pytest.raises(ValueError, match="does not match the purchase"):
+        create_session(db, payment.id, "AA:BB:CC:DD:EE:FF", ip)
+    session = create_session(db, payment.id)
+    assert (session.device_mac_address, session.device_ip_address) == (mac, ip)
 
 def test_get_packages(client, package):
     assert client.get("/api/packages/").json()[0]["name"] == "1 Hour"
@@ -65,7 +126,8 @@ def test_unsafe_endpoints_are_closed(client, monkeypatch):
     assert client.post("/api/test-activation").status_code in (404, 405)
     assert client.post("/api/payments/mock", json={"purchase_id": 1, "phone_number": PHONE}).status_code == 404
 
-def test_mock_purchase_payment_and_activation(client, user, package):
+def test_mock_purchase_payment_and_activation(client, db, user, package, monkeypatch):
+    headers = staff_headers(db, monkeypatch)
     purchase = client.post(
         "/api/purchases",
         json={"user_id": user.id, "package_id": package.id},
@@ -81,12 +143,13 @@ def test_mock_purchase_payment_and_activation(client, user, package):
     assert created.status_code == 201
     assert created.json()["started_at"] is None
     path = f"/api/sessions/{created.json()['id']}"
-    active = client.post(f"{path}/activate")
+    assert client.post(f"{path}/activate").status_code == 401  # staff only
+    active = client.post(f"{path}/activate", headers=headers)
     assert active.status_code == 200
     assert active.json()["status"] == "ACTIVE"
     assert active.json()["started_at"] and active.json()["expires_at"]
-    assert client.post(f"{path}/activate").json() == active.json()
-    assert client.get(path).json() == active.json()
+    assert client.post(f"{path}/activate", headers=headers).json() == active.json()
+    assert client.get(path, headers=headers).json() == active.json()
 
 
 def test_package_writes_require_mock_mode(client, db, monkeypatch):
@@ -178,10 +241,14 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     from app.services.router import RouterActivationUnconfirmed
 
     monkeypatch.setenv("ROUTER_MODE", "mikrotik")
-    payment = paid_payment(db, user, package)
+    purchase, _ = create_purchase(
+        db, user.id, package.id, "key-12345",
+        device_mac="AA:BB:CC:DD:EE:FF", device_ip="10.20.0.254",
+    )
+    payment = process_mock_payment(db, create_payment(db, purchase.id, PHONE).id, True)
     payment.raw_callback = {"test": "verified payment fixture"}
     db.commit()
-    session = create_session(db, payment.id, "AA:BB:CC:DD:EE:FF", "10.20.0.254")
+    session = create_session(db, payment.id)
     calls = []
 
     def activate_once(**kwargs):
@@ -198,18 +265,19 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     monkeypatch.setattr(session_service, "activate_access_device", activate_once)
     monkeypatch.setattr(session_service, "activate_hotspot_device", verify_only)
     endpoint = f"/api/sessions/{session.id}/activate"
+    headers = staff_headers(db, monkeypatch)
 
     for _ in range(2):
-        response = client.post(endpoint)
+        response = client.post(endpoint, headers=headers)
         assert response.status_code == 202
         assert response.json()["activation_status"] == "waiting"
         assert response.json()["started_at"] is None
 
-    response = client.post(endpoint)
+    response = client.post(endpoint, headers=headers)
     assert response.status_code == 200
     assert response.json()["activation_status"] == "succeeded"
     assert response.json()["started_at"] is not None
-    assert client.post(endpoint).status_code == 200
+    assert client.post(endpoint, headers=headers).status_code == 200
     assert calls == ["activate", "verify", "verify"]
 
     attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()

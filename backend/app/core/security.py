@@ -53,3 +53,21 @@ def read_token(token: str) -> int | None:
     except (jwt.PyJWTError, TypeError, ValueError, OverflowError):
         return None
     return user_id if 0 < user_id <= 2**31 - 1 else None
+
+
+def create_device_reference(claims: dict) -> str:
+    return jwt.encode(
+        {**claims, "aud": "checkout-device", "exp": int(time.time()) + 300},
+        _secret(),
+        algorithm="HS256",
+    )
+
+
+def read_device_reference(token: str) -> dict:
+    try:
+        return jwt.decode(
+            token, _secret(), algorithms=["HS256"], audience="checkout-device",
+            options={"require": ["exp", "aud", "ip", "mac", "user", "package", "key"]},
+        )
+    except jwt.PyJWTError:
+        raise ValueError("Unknown or expired device reference") from None

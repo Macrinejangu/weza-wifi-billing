@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
+from app.api.auth import current_staff
 from app.db.session import get_db
 from app.models import WiFiSession
 from app.schemas.billing import SessionIn, SessionOut
@@ -14,7 +15,7 @@ def new_session(data: SessionIn, db: Session = Depends(get_db)):
     return create_session(db, data.payment_id, data.device_mac_address, data.device_ip_address)
 
 
-@router.post("/{session_id}/activate", response_model=SessionOut)
+@router.post("/{session_id}/activate", response_model=SessionOut, dependencies=[Depends(current_staff)])
 def activate(session_id: int, response: Response, db: Session = Depends(get_db)):
     session = activate_session(db, session_id)
     if session.activation_status == "failed":
@@ -24,7 +25,7 @@ def activate(session_id: int, response: Response, db: Session = Depends(get_db))
     return session
 
 
-@router.get("/{session_id}", response_model=SessionOut)
+@router.get("/{session_id}", response_model=SessionOut, dependencies=[Depends(current_staff)])
 def get_session(session_id: int, db: Session = Depends(get_db)):
     session = db.get(WiFiSession, session_id)
     if session is None:
