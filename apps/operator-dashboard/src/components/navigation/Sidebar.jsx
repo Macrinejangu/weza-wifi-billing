@@ -27,7 +27,7 @@ export default function Sidebar({ mobileMenuOpen, onClose, operator, activePage 
       <nav className="sidebar-navigation" aria-label="Main navigation">
         <p className="navigation-label">WORKSPACE</p>
         {navigationItems.map((item) => {
-          const enabled = item.enabled && (!onSignOut || item.id === 'payments' || item.id === 'sessions')
+          const enabled = item.enabled && (!onSignOut || item.id === 'payments' || item.id === 'sessions' || item.id === 'packages')
           return (
             <button
               key={item.label}

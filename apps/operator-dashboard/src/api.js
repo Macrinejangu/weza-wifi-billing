@@ -94,3 +94,21 @@ export function listStaffSessions(accessToken, { limit = 50, offset = 0, status,
     errorMessage: 'Could not load session records. Please try again.',
   })
 }
+
+export async function listActivePackages({ signal } = {}) {
+  const response = await fetch(`${apiBaseUrl}/api/packages/`, {
+    cache: 'no-store',
+    signal,
+  })
+
+  if (!response.ok) {
+    throw new Error('Could not load packages. Please try again.')
+  }
+
+  const packages = await response.json()
+  if (!Array.isArray(packages)) {
+    throw new Error('The package catalog returned an invalid response.')
+  }
+
+  return packages
+}
