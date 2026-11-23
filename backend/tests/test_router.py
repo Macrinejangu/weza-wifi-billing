@@ -1,0 +1,220 @@
+
+import asyncio
+
+from httpx import ASGITransport, AsyncClient
+
+import app.api.router as router_api
+from app.main import app
+
+
+def request_router_status(headers=None):
+    async def make_request():
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+        ) as client:
+            return await client.get(
+                "/router/status",
+                headers=headers,
+            )
+
+    return asyncio.run(make_request())
+
+
+def configure_valid_router(monkeypatch):
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        lambda: "test-secret-key",
+    )
+    monkeypatch.setattr(
+        router_api,
+        "router_settings",
+        lambda: {"expected_identity": "CHR"},
+    )
+    monkeypatch.setattr(
+        router_api,
+        "get_router_identity",
+        lambda: {"name": "CHR"},
+    )
+
+
+def test_router_status_with_valid_key(monkeypatch):
+    configure_valid_router(monkeypatch)
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "connected",
+        "identity": "CHR",
+    }
+
+
+def test_router_status_without_key(monkeypatch):
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        lambda: "test-secret-key",
+    )
+
+    response = request_router_status()
+
+    assert response.status_code == 401
+
+
+def test_router_status_with_invalid_key(monkeypatch):
+    configure_valid_router(monkeypatch)
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "wrong-key"}
+    )
+
+    assert response.status_code == 401
+
+
+def test_router_status_with_malformed_key(monkeypatch):
+    configure_valid_router(monkeypatch)
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": " "}
+    )
+
+    assert response.status_code == 401
+
+
+def test_router_status_when_server_key_is_missing(monkeypatch):
+    def missing_key():
+        raise RuntimeError("WEZA_API_KEY is missing")
+
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        missing_key,
+    )
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 503
+
+
+def test_router_status_when_expected_identity_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        lambda: "test-secret-key",
+    )
+    monkeypatch.setattr(
+        router_api,
+        "router_settings",
+        lambda: {"expected_identity": None},
+    )
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 503
+
+
+def test_router_status_when_router_identity_is_missing(monkeypatch):
+    configure_valid_router(monkeypatch)
+    monkeypatch.setattr(
+        router_api,
+        "get_router_identity",
+        lambda: {},
+    )
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 502
+
+
+def test_router_status_when_router_identity_does_not_match(monkeypatch):
+    configure_valid_router(monkeypatch)
+    monkeypatch.setattr(
+        router_api,
+        "get_router_identity",
+        lambda: {"name": "UNEXPECTED-ROUTER"},
+    )
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 502
+
+
+def test_router_status_when_router_is_unavailable(monkeypatch):
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        lambda: "test-secret-key",
+    )
+    monkeypatch.setattr(
+        router_api,
+        "router_settings",
+        lambda: {"expected_identity": "CHR"},
+    )
+
+    def unavailable_router():
+        raise OSError("Router connection failed")
+
+    monkeypatch.setattr(
+        router_api,
+        "get_router_identity",
+        unavailable_router,
+    )
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Router is unavailable"
+    }
+
+
+def test_router_status_when_api_key_is_not_configured(monkeypatch):
+    def missing_api_key():
+        raise RuntimeError("WEZA_API_KEY is missing")
+
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        missing_api_key,
+    )
+
+    response = request_router_status(
+        {"X-WEZA-API-Key": "test-secret-key"}
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "API authentication is not configured"
+    }
+
+
+def test_router_status_with_non_ascii_key(monkeypatch):
+    monkeypatch.setattr(
+        router_api,
+        "weza_api_key",
+        lambda: "test-secret-key",
+    )
+
+    response = request_router_status(
+        {b"X-WEZA-API-Key": b"\xff"}
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or missing API key"
+    }

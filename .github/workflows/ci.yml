@@ -40,5 +40,6 @@ jobs:
           . ../.env
           set +a
           export TEST_DATABASE_URL="$DATABASE_URL"
+          export ROUTER_MODE=mock
           python -m alembic upgrade head
           python -m pytest

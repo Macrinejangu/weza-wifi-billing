@@ -1,0 +1,125 @@
+.connection-issues-page,
+.connection-issue-dialog {
+  --issue-text: var(--wz-color-text-primary, #1e1e24);
+  --issue-muted: var(--wz-color-text-secondary, #5f5f66);
+  --issue-surface: var(--wz-color-surface, #fff);
+  --issue-subtle: var(--wz-color-surface-low, #f4f4f2);
+  --issue-border: var(--wz-color-border-subtle, #ededeb);
+  --issue-lime: var(--wz-color-accent-lime, #d4e839);
+  color: var(--issue-text);
+}
+
+.connection-issues-page { display: grid; gap: 16px; min-width: 0; }
+.connection-issues-page h1 { margin: 4px 0; font-size: clamp(24px, 3vw, 32px); }
+.connection-issues-page p,
+.connection-issue-dialog p { margin: 4px 0; color: var(--issue-muted); font-size: 14px; line-height: 1.5; }
+.connection-issues-page .connection-issue-eyebrow { color: #51496f; font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.connection-issue-demo { padding: 10px 14px; border-radius: 8px; background: #f1eef7; }
+.connection-issue-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.connection-issue-panel,
+.connection-issue-table-panel { min-width: 0; border: 1px solid var(--issue-border); border-radius: 12px; background: var(--issue-surface); }
+.connection-issue-panel { padding: 16px; }
+.connection-issue-metrics h2 { margin: 0 0 6px; font-size: 12px; text-transform: uppercase; }
+.connection-issue-metrics strong { font-size: 28px; }
+.connection-issue-metrics p { font-size: 12px; }
+.connection-issue-filters,
+.connection-issue-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.connection-issue-filters input { flex: 1 1 250px; min-width: 0; }
+.connection-issues-page button,
+.connection-issues-page input,
+.connection-issues-page select,
+.connection-issue-dialog button,
+.connection-issue-dialog select,
+.connection-issue-dialog textarea {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 7px 11px;
+  border: 1px solid var(--issue-border);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--issue-subtle);
+  font: inherit;
+  font-size: 13px;
+}
+.connection-issues-page button,
+.connection-issue-dialog button { cursor: pointer; font-weight: 600; }
+.connection-issues-page > button { justify-self: start; }
+.connection-issues-page button[aria-pressed="true"],
+.connection-issues-page .connection-issue-primary,
+.connection-issue-dialog .connection-issue-primary { background: var(--issue-lime); }
+.connection-issue-dialog button:disabled { opacity: .55; cursor: default; }
+.connection-issues-page :focus-visible,
+.connection-issue-dialog :focus-visible { outline: 2px solid #746d97; outline-offset: 2px; }
+.connection-issue-table-panel { overflow: hidden; }
+.connection-issue-table-scroll { overflow-x: auto; }
+.connection-issue-table-panel table { width: 100%; min-width: 780px; border-collapse: collapse; text-align: left; }
+.connection-issue-table-panel th,
+.connection-issue-table-panel td { padding: 12px; border-bottom: 1px solid var(--issue-border); font-size: 14px; }
+.connection-issue-table-panel thead th { background: var(--issue-subtle); color: var(--issue-muted); font-size: 11px; text-transform: uppercase; }
+.connection-issue-table-panel small { display: block; margin-top: 4px; color: var(--issue-muted); font-size: 12px; font-weight: 500; }
+.connection-issues-page .connection-issue-results { padding: 8px 12px; font-size: 12px; }
+.connection-issue-badge { display: inline-block; padding: 4px 8px; border-radius: 999px; background: #efedf5; color: #4f4669; font-size: 12px; font-weight: 650; }
+.connection-issue-badge[data-value="High"],
+.connection-issue-badge[data-value="New"] { background: #feeceb; color: #98251d; }
+.connection-issue-badge[data-value="Resolved"] { background: #e8f5e9; color: #195936; }
+.connection-issue-detail-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.connection-issue-detail-header p { margin-bottom: 10px; }
+.connection-issue-detail-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; }
+.connection-issue-panel h2 { margin-top: 0; }
+.connection-issue-detail-grid h2 { font-size: 18px; }
+.connection-issue-detail-grid h3 { font-size: 15px; }
+.connection-issue-detail-grid ol { padding-left: 20px; font-size: 14px; }
+.connection-issue-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.connection-issue-metadata dt { color: var(--issue-muted); font-size: 12px; }
+.connection-issue-metadata dd { margin: 4px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.connection-issue-dialog { width: min(460px, calc(100% - 32px)); max-height: calc(100% - 32px); overflow: auto; padding: 20px; border: 1px solid var(--issue-border); border-radius: 14px; background: var(--issue-surface); }
+.connection-issue-dialog::backdrop { background: rgb(30 30 36 / 45%); }
+.connection-issue-dialog h2 { margin: 0; font-size: 20px; }
+.connection-issue-dialog form,
+.connection-issue-dialog label { display: grid; gap: 10px; }
+.connection-issue-dialog label { font-size: 13px; font-weight: 650; }
+.connection-issue-dialog textarea { resize: vertical; }
+.connection-issue-dialog .connection-issue-actions { justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .connection-issue-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .connection-issue-detail-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 460px) {
+  .connection-issue-metrics { grid-template-columns: 1fr; }
+}
+
+.connection-issue-stack { display: grid; align-content: start; gap: 14px; }
+.connection-issue-stack > label { display: grid; gap: 6px; font-size: 13px; }
+.connection-issue-stack > button { justify-self: end; }
+.connection-issue-stack textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--issue-border);
+  border-radius: 8px;
+  background: var(--issue-subtle);
+  font: inherit;
+  resize: vertical;
+}
+.connection-issue-callout,
+.connection-issue-problem { padding: 12px 14px; border-radius: 9px; }
+.connection-issue-callout { background: #f5fadb; }
+.connection-issue-panel .connection-issue-callout { margin-top: 12px; }
+.connection-issue-problem { background: #feeceb; }
+.connection-issue-alert,
+.connection-issue-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.connection-issue-alert { align-items: center; flex-wrap: wrap; font-size: 13px; }
+.connection-issue-dialog .connection-issue-verify {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--issue-subtle);
+}
+.connection-issue-dialog .connection-issue-verify input { margin-top: 3px; }
