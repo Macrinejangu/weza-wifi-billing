@@ -36,6 +36,8 @@ Invalid input returns 422 with validation details. Missing records or inactive p
 
 Asks Daraja (sandbox) to send an M-Pesa prompt to the customer's phone for one purchase. Implemented in WEZA-49.
 
+The route returns 404 by default. Set `ENABLE_DARAJA_SANDBOX_PAYMENTS=true` only in a sandbox restricted to the team. The switch enables the route independently of the Daraja credentials, so both the switch and valid sandbox settings are required to send a prompt.
+
 **Accepted by Daraja does not mean paid.** A 201 only means the prompt was sent. The payment stays `pending` until a verified callback or status query settles it (WEZA-50).
 
 ### Request

@@ -1022,7 +1022,6 @@ a {
 }
 
 .public-content {
-  flex: 1;
   padding-block: 2rem 3rem;
 }
 
@@ -1142,5 +1141,61 @@ a {
 
   .public-content {
     padding-top: 1rem;
+  }
+}
+.public-welcome .welcome-feature-grid {
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.public-welcome .welcome-feature-card {
+  min-height: 12.5rem;
+  padding: 1.75rem;
+}
+
+.public-welcome .welcome-feature-card svg {
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 1rem;
+}
+
+.public-welcome .welcome-feature-card h2 {
+  font-size: 1.125rem;
+}
+
+.public-welcome .welcome-feature-card p {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .public-welcome .welcome-feature-card {
+    min-height: auto;
+    padding: 1.25rem;
+  }
+}
+.public-welcome .public-hero {
+  display: flex;
+  min-height: 20rem;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.public-welcome .public-hero p {
+  max-width: 34rem;
+  line-height: 1.65;
+}
+
+.public-welcome .welcome-feature-grid {
+  margin-top: 2rem;
+}
+
+@media (max-width: 600px) {
+  .public-welcome .public-hero {
+    min-height: auto;
+  }
+
+  .public-welcome .welcome-feature-grid {
+    margin-top: 1.5rem;
   }
 }

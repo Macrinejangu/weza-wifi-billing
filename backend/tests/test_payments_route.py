@@ -56,6 +56,11 @@ class FakeStkClient:
         return self.outcome
 
 
+@pytest.fixture(autouse=True)
+def enable_sandbox_payments(monkeypatch):
+    monkeypatch.setenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", "true")
+
+
 @pytest.fixture
 def fake(monkeypatch):
     fake_client = FakeStkClient()
@@ -90,6 +95,24 @@ def payment_count(db) -> int:
 def stored_status(db, payment_id) -> str:
     db.expire_all()
     return db.get(Payment, payment_id).status
+
+
+@pytest.mark.parametrize("setting", [None, "false"])
+def test_disabled_payments_stop_before_building_daraja_client(
+    client, db, purchase, monkeypatch, setting
+):
+    if setting is None:
+        monkeypatch.delenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", raising=False)
+    else:
+        monkeypatch.setenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", setting)
+
+    def unexpected_client():
+        pytest.fail("Disabled payments attempted to resolve the Daraja client")
+
+    monkeypatch.setitem(app.dependency_overrides, get_daraja_client, unexpected_client)
+    assert payment_count(db) == 0
+    assert post(client, purchase.id).status_code == 404
+    assert payment_count(db) == 0
 
 
 def test_accepted_payment_returns_201_and_a_pending_status(client, fake, purchase):
