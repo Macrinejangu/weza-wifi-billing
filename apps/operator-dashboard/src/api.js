@@ -112,3 +112,14 @@ export async function listActivePackages({ signal } = {}) {
 
   return packages
 }
+
+
+export function listStaffCustomers(accessToken, { limit = 50, offset = 0, status, query, signal } = {}) {
+  const params = new URLSearchParams({ limit, offset })
+  if (status) params.set('status', status)
+  if (query) params.set('q', query)
+  return readStaffData(`/api/customers?${params}`, accessToken, {
+    signal,
+    errorMessage: 'Could not load customers. Please try again.',
+  })
+}

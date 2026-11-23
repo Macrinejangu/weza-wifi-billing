@@ -161,3 +161,52 @@ def test_session_detail_and_activation_are_staff_only(client, db):
     for send, path in [(client.get, "/api/sessions/1"), (client.post, "/api/sessions/1/activate")]:
         assert send(path).status_code == 401
         assert send(path, headers=headers).status_code == 403
+
+
+
+def test_customer_directory_is_staff_only(client, db):
+    customer = add_user(db, role="customer", email="customer@weza.local")
+    suspended_staff = add_user(db, status="suspended")
+
+    assert client.get("/api/customers").status_code == 401
+    customer_headers = {"Authorization": f"Bearer {create_token(customer.id)}"}
+    suspended_headers = {"Authorization": f"Bearer {create_token(suspended_staff.id)}"}
+    assert client.get("/api/customers", headers=customer_headers).status_code == 403
+    assert client.get("/api/customers", headers=suspended_headers).status_code == 401
+
+
+def test_customer_directory_returns_minimal_customer_fields(client, db):
+    staff = add_user(db)
+    customer = add_user(db, role="customer", email="customer@weza.local")
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+
+    response = client.get("/api/customers", headers=headers)
+    assert response.status_code == 200
+    rows = response.json()
+    assert [row["id"] for row in rows] == [customer.id]
+    assert set(rows[0]) == {"id", "full_name", "phone", "status", "created_at"}
+    assert rows[0]["phone"] is None
+
+
+def test_customer_directory_applies_search_status_and_pagination(client, db):
+    staff = add_user(db)
+    first = add_user(db, role="customer", email="first@weza.local")
+    second = add_user(db, role="customer", status="inactive", email="second@weza.local")
+    first.full_name = "Audit Customer"
+    first.phone = "+254700000001"
+    db.commit()
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+
+    def ids(**params):
+        response = client.get("/api/customers", headers=headers, params=params)
+        assert response.status_code == 200
+        return [row["id"] for row in response.json()]
+
+    assert ids(limit=1) == [second.id]
+    assert ids(limit=1, offset=1) == [first.id]
+    assert ids(status="inactive") == [second.id]
+    assert ids(q="audit") == [first.id]
+    assert ids(q="700000001") == [first.id]
+    assert ids(q=str(first.id)) == [first.id]
+    assert ids(q="%") == []
+    assert client.get("/api/customers?limit=101", headers=headers).status_code == 422
