@@ -14,7 +14,7 @@ from app.integrations.mpesa.stk_query import StkQueryOutcome
 from app.models import Payment, PaymentEvent, Purchase
 from app.payments.callback_verification import CallbackVerdict
 from app.payments.settlement_plan import SettlementAction
-from app.payments.statuses import PaymentStatus
+
 from app.payments.result_codes import failure_reason_for
 from app.services import payment_settlement
 from app.services.payment_event_service import EventSource, record_received_event
@@ -277,6 +277,7 @@ def test_unique_index_collision_is_caught_and_recorded(db, user, package):
     assert result.action is SettlementAction.REJECT
     assert late.status == "expired"
     assert late.mpesa_receipt_number is None
+    assert purchase.status == "pending"  # savepoint rollback undid the purchase change too
     event = event_row(db, event_id)
     assert event.processing_status == "rejected"
     assert "conflicts" in event.error_message
