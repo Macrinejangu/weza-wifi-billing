@@ -14,6 +14,7 @@ from app.api.sessions import router as sessions_router
 from app.api.staff import router as staff_router
 
 from app.api.routes.customers import router as customers_router
+from app.api.routes.issues import router as connection_issues_router
 from app.api.routes.network import router as network_inventory_router
 from app.api.routes.payments import router as mpesa_payments_router
 from app.api.routes.mpesa_callback import router as mpesa_callback_router
@@ -33,6 +34,7 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(staff_router)
 app.include_router(customers_router)
+app.include_router(connection_issues_router)
 app.include_router(network_inventory_router)
 app.include_router(mpesa_payments_router)
 app.include_router(mpesa_callback_router)

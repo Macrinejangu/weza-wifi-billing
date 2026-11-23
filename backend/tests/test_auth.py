@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.security import create_token, hash_password
 from app.api import staff as staff_api
-from app.models import AccessPoint, Router, User, WiFiSession
+from app.models import AccessPoint, ActivationAttempt, Router, User, WiFiSession
 
 from test_payment_settlement import make_payment, make_purchase
 
@@ -317,3 +317,55 @@ def test_staff_network_inventory_returns_saved_records_and_empty_lists(client, d
         "last_seen_at": record["last_seen_at"],
     }
     assert datetime.fromisoformat(record["last_seen_at"]) == seen
+
+
+def test_connection_issues_require_active_staff(client, db):
+    customer = add_user(db, role="customer", email="issues-customer@weza.local")
+    suspended = add_user(db, status="suspended", email="issues-suspended@weza.local")
+
+    assert client.get("/api/connection-issues").status_code == 401
+    assert client.get("/api/connection-issues", headers={"Authorization": f"Bearer {create_token(customer.id)}"}).status_code == 403
+    assert client.get("/api/connection-issues", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
+
+
+def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostics(client, db, user, package):
+    staff = add_user(db)
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+    assert client.get("/api/connection-issues", headers=headers).json() == []
+
+    def create_session(key, payment_status, activation_status, session_status):
+        purchase = make_purchase(db, user, package, key=key)
+        payment = make_payment(
+            db, purchase, checkout=key, status=payment_status,
+            receipt=f"receipt-{key}" if payment_status == "successful" else None,
+        )
+        session = WiFiSession(
+            payment_id=payment.id, user_id=user.id, package_id=package.id,
+            status=session_status, activation_status=activation_status,
+            failure_reason="internal diagnostic text",
+        )
+        db.add(session)
+        db.commit()
+        return payment, session
+
+    payment, failed = create_session("paid-failed", "successful", "failed", "FAILED")
+    create_session("unpaid-failed", "pending", "failed", "FAILED")
+    create_session("paid-waiting", "successful", "waiting", "ACTIVATING")
+    db.add_all([
+        ActivationAttempt(session_id=failed.id, attempt_number=1, status="failed", error_code="RouterActivationError"),
+        ActivationAttempt(session_id=failed.id, attempt_number=2, status="failed", error_code="TimeoutError", error_message="internal diagnostic text"),
+    ])
+    db.commit()
+
+    response = client.get("/api/connection-issues", headers=headers)
+    assert response.status_code == 200
+    [issue] = response.json()
+    assert issue["session_id"] == failed.id
+    assert issue["customer_id"] == user.id
+    assert issue["payment_id"] == payment.id
+    assert issue["payment_reference"] == "receipt-paid-failed"
+    assert issue["payment_status"] == "successful"
+    assert issue["activation_status"] == "failed"
+    assert issue["failure_reason"] == "The activation request timed out."
+    assert "internal diagnostic text" not in response.text
+    assert client.get("/api/connection-issues?offset=1", headers=headers).json() == []

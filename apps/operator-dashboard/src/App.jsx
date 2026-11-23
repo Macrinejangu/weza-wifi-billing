@@ -113,6 +113,8 @@ export default function App() {
           <CustomersPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'network-devices' ? (
           <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'connection-issues' ? (
+          <ConnectionIssuesPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'staff-profile' ? (
           <StaffProfilePage operator={operator} staff={staff} onSignOut={signOut} />
         ) : (

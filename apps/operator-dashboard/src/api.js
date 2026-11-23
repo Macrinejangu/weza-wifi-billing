@@ -139,3 +139,12 @@ export function getStaffNetworkInventory(accessToken, { signal } = {}) {
     errorMessage: 'Could not load device inventory. Please try again.',
   })
 }
+
+
+export function listStaffConnectionIssues(accessToken, { limit = 50, offset = 0, signal } = {}) {
+  const params = new URLSearchParams({ limit, offset })
+  return readStaffData(`/api/connection-issues?${params}`, accessToken, {
+    signal,
+    errorMessage: 'Could not load connection issues. Please try again.',
+  })
+}
