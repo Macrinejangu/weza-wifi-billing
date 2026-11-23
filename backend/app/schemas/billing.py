@@ -16,6 +16,16 @@ class PurchaseIn(CheckoutIn):
     device_reference: str | None = Field(default=None, max_length=2048)
 
 
+class CustomerCheckoutIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    package_id: int
+
+
+class CustomerPurchaseIn(CustomerCheckoutIn):
+    device_reference: str | None = Field(default=None, max_length=2048)
+
+
 class DeviceReferenceOut(BaseModel):
     device_reference: str
 

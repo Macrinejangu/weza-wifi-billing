@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { Link, MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from './App.jsx'
 
@@ -11,7 +11,6 @@ vi.hoisted(() => {
   vi.stubEnv('VITE_USE_DEMO_DATA', 'false')
   vi.stubEnv('VITE_ENABLE_SANDBOX_CHECKOUT', 'true')
   vi.stubEnv('VITE_SANDBOX_PACKAGE_ID', '1')
-  vi.stubEnv('VITE_SANDBOX_PURCHASE_ID', '42')
   vi.stubEnv('VITE_API_BASE_URL', '')
 })
 
@@ -35,7 +34,23 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function openCheckout() {
+const token = `header.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }))}.signature`
+
+function mockPurchase(amount = 35) {
+  request.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ id: 42, amount }),
+  })
+}
+
+async function openCheckout({ signedIn = true } = {}) {
+  if (signedIn) {
+    request.mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: token }) })
+    request.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 7, full_name: 'Pilot Customer', email: 'pilot@example.test' }),
+    })
+  }
   request.mockResolvedValueOnce({
     ok: true,
     json: async () => [
@@ -53,11 +68,19 @@ async function openCheckout() {
 
   await act(async () => {
     root.render(
-      <MemoryRouter initialEntries={['/packages']}>
+      <MemoryRouter initialEntries={[signedIn ? '/login' : '/packages']}>
+        <Link id="test-packages" to="/packages">Packages</Link>
         <App />
       </MemoryRouter>
     )
   })
+
+  if (signedIn) {
+    container.querySelector('input[name="email"]').value = 'pilot@example.test'
+    container.querySelector('input[name="password"]').value = 'test-password'
+    await act(async () => container.querySelector('button[type="submit"]').click())
+    await act(async () => container.querySelector('#test-packages').click())
+  }
 
   const choosePackage = container.querySelector('a[href="/packages?package=1"]')
   expect(choosePackage).not.toBeNull()
@@ -68,6 +91,7 @@ async function openCheckout() {
   await act(async () => continueToCheckout.click())
 
   expect(container.querySelector('h1')?.textContent).toBe('Confirm your package')
+  if (!signedIn) return
   const checkout = container.querySelector('#checkout-phone')?.closest('section')
   expect(checkout?.querySelector('h2')?.textContent).toBe('Local Test Package')
 }
@@ -89,11 +113,12 @@ test('rejects an invalid number before requesting payment', async () => {
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
     'Enter a Kenyan mobile number'
   )
-  expect(request).toHaveBeenCalledTimes(1)
+  expect(request).toHaveBeenCalledTimes(3)
 })
 
 test('sends a normalized number for the pending purchase and locks submission', async () => {
   await openCheckout()
+  mockPurchase()
 
   request.mockResolvedValueOnce({
     ok: true,
@@ -108,9 +133,18 @@ test('sends a normalized number for the pending purchase and locks submission', 
 
   await submitPhone('0712 345 678')
 
-  expect(request).toHaveBeenNthCalledWith(2, '/api/payments', {
+  expect(request).toHaveBeenNthCalledWith(4, '/api/customer/purchases', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'Idempotency-Key': expect.any(String),
+    },
+    body: JSON.stringify({ package_id: 1 }),
+  })
+  expect(request).toHaveBeenNthCalledWith(5, '/api/payments', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({
       purchase_id: 42,
       phone_number: '254712345678',
@@ -122,11 +156,12 @@ test('sends a normalized number for the pending purchase and locks submission', 
   expect(container.querySelector('button[type="submit"]')?.disabled).toBe(true)
 
   await act(async () => container.querySelector('button[type="submit"]').click())
-  expect(request).toHaveBeenCalledTimes(2)
+  expect(request).toHaveBeenCalledTimes(5)
 })
 
 test('locks submission when the backend cannot confirm whether it sent the prompt', async () => {
   await openCheckout()
+  mockPurchase()
 
   request.mockResolvedValueOnce({
     ok: false,
@@ -147,4 +182,42 @@ test('locks submission when the backend cannot confirm whether it sent the promp
     'Payment reference: 7.'
   )
   expect(container.querySelector('button[type="submit"]')?.disabled).toBe(true)
+})
+test('requires customer sign-in before showing the payment form', async () => {
+  await openCheckout({ signedIn: false })
+
+  expect(container.querySelector('#checkout-phone')).toBeNull()
+  expect(container.textContent).toContain('Sign in to continue.')
+  expect(request).toHaveBeenCalledTimes(1)
+})
+
+test('stops before sending a prompt if the purchase amount changed', async () => {
+  await openCheckout()
+  mockPurchase(50)
+  await submitPhone('0712345678')
+
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('The package price changed.')
+  expect(request).toHaveBeenCalledTimes(4)
+})
+
+test('reuses the purchase key after a retryable payment failure', async () => {
+  await openCheckout()
+  mockPurchase()
+  request.mockResolvedValueOnce({
+    ok: false,
+    status: 503,
+    json: async () => ({ code: 'provider_not_reached' }),
+  })
+  await submitPhone('0712345678')
+
+  mockPurchase()
+  request.mockResolvedValueOnce({
+    ok: true,
+    json: async () => ({ purchase_id: 42, payment_id: 7, status: 'pending' }),
+  })
+  await submitPhone('0712345678')
+
+  const firstKey = request.mock.calls[3][1].headers['Idempotency-Key']
+  expect(request.mock.calls[5][1].headers['Idempotency-Key']).toBe(firstKey)
+  expect(container.querySelector('[role="status"]')?.textContent).toContain('pending confirmation')
 })

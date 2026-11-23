@@ -45,9 +45,21 @@ async function apiRequest(endpoint, options = {}) {
   return data
 }
 
-export function startMpesaPayment({ purchaseId, phoneNumber }) {
+export function createCustomerPurchase({ accessToken, packageId, idempotencyKey }) {
+  return apiRequest('/api/customer/purchases', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ package_id: packageId }),
+  })
+}
+
+export function startMpesaPayment({ accessToken, purchaseId, phoneNumber }) {
   return apiRequest('/api/payments', {
     method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       purchase_id: purchaseId,
       phone_number: phoneNumber,

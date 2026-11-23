@@ -123,7 +123,7 @@ export default function App() {
         <Route
           path="/confirm-package"
           element={
-            demoDataEnabled || sandboxCheckoutEnabled ? <ConfirmPackage /> : (
+            demoDataEnabled || sandboxCheckoutEnabled ? <ConfirmPackage accessToken={customerSession?.accessToken} /> : (
               <UnavailablePage
                 title="Checkout"
                 message="Live checkout is currently unavailable."

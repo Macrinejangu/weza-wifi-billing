@@ -3,10 +3,12 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+from app.api.auth import current_customer
 from app.core.security import create_device_reference, read_device_reference
 from app.db.session import get_db
+from app.models import User
 from app.schemas.billing import (
-    CheckoutIn, DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
+    CustomerCheckoutIn, CustomerPurchaseIn, CheckoutIn, DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
 )
 from app.services.device_identity import (
     checkout_device_verification_enabled, resolve_hotspot_device, validate_client_ip,
@@ -17,6 +19,7 @@ from app.services.purchase_service import create_purchase
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Purchases and Payments"])
+customer_router = APIRouter(prefix="/api/customer", tags=["Customer checkout"])
 
 
 def direct_client_ip(request: Request) -> str:
@@ -85,6 +88,31 @@ def new_purchase(
     )
     response.status_code = 201 if created else 200  # repeated key: same purchase back
     return purchase
+
+
+@customer_router.post("/checkout/device-reference", response_model=DeviceReferenceOut)
+def issue_customer_device_reference(
+    data: CustomerCheckoutIn, request: Request, response: Response,
+    customer: User = Depends(current_customer),
+    idempotency_key: str = Header(min_length=8, max_length=100),
+):
+    return issue_device_reference(
+        CheckoutIn(user_id=customer.id, package_id=data.package_id),
+        request, response, idempotency_key,
+    )
+
+
+@customer_router.post("/purchases", response_model=PurchaseOut, status_code=201)
+def new_customer_purchase(
+    data: CustomerPurchaseIn, request: Request, response: Response,
+    customer: User = Depends(current_customer),
+    db: Session = Depends(get_db),
+    idempotency_key: str = Header(min_length=8, max_length=100),
+):
+    return new_purchase(
+        PurchaseIn(user_id=customer.id, **data.model_dump()),
+        request, response, db, idempotency_key,
+    )
 
 
 @router.post("/payments/mock", response_model=PaymentOut)

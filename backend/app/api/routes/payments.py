@@ -3,17 +3,14 @@
 The route is deliberately thin. PaymentRequest validates the input, the
 service holds every payment rule, and the amount always comes from our own
 database. The route only:
-  1. hands the request to initiate_payment(), and
-  2. translates every outcome into a stable HTTP status and error body.
+  1. verifies purchase ownership,
+  2. calls initiate_payment(), and
+  3. translates the service outcome into a stable HTTP status and error body.
 
 Every error body has the same shape so the portal can rely on it:
     {"detail": "<customer-safe text>", "code": "<machine code>", "payment_id": 7}
 "payment_id" appears only when a payment row exists. The text always comes
 from our own fixed messages, never from Daraja, the database or an exception.
-
-KNOWN GAP: there is no customer login yet, so anyone who guesses a purchase id
-could trigger an M-Pesa prompt for it. Add an ownership check when customer
-authentication exists.
 """
 import logging
 import os
@@ -23,12 +20,15 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.api.auth import current_customer
 from app.config import ROOT_ENV, daraja_settings
 from app.db.session import get_db
 from app.integrations.mpesa.client import DarajaClient
+from app.models import Purchase, User
 from app.payments.payment_service_errors import (
     OutcomeUnknown,
     PaymentAlreadyPending,
@@ -126,6 +126,7 @@ def _error_response(
 )
 def start_mpesa_payment(
     data: PaymentRequest,
+    customer: User = Depends(current_customer),
     db: Session = Depends(get_db),
     daraja: DarajaClient | None = Depends(get_daraja_client),
 ):
@@ -135,13 +136,17 @@ def start_mpesa_payment(
     blocking, so FastAPI runs this in a worker thread and other requests are
     not held up.
     """
-    if daraja is None:
-        # Checked BEFORE the service runs, so nothing is recorded.
-        return _error_response(
-            503, "payments_not_configured", "Payments are not available right now."
-        )
-
     try:
+        owned_purchase = db.scalar(select(Purchase.id).where(
+            Purchase.id == data.purchase_id,
+            Purchase.user_id == customer.id,
+        ))
+        if owned_purchase is None:
+            raise PurchaseNotFound()
+        if daraja is None:
+            return _error_response(
+                503, "payments_not_configured", "Payments are not available right now."
+            )
         result = initiate_payment(db, daraja, data.purchase_id, data.phone_number)
     except PaymentServiceError as error:
         return _error_response(

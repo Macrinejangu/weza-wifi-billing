@@ -8,7 +8,6 @@ const sandboxCheckoutEnabled =
   import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
 
 const sandboxPackageId = Number(import.meta.env.VITE_SANDBOX_PACKAGE_ID)
-const sandboxPurchaseId = Number(import.meta.env.VITE_SANDBOX_PURCHASE_ID)
 
 const demoPackages = demoDataEnabled ? [
   {
@@ -120,9 +119,7 @@ export default function Packages() {
 
   const showSandboxCheckout =
     sandboxCheckoutEnabled &&
-    selectedPackage?.id === sandboxPackageId &&
-    Number.isSafeInteger(sandboxPurchaseId) &&
-    sandboxPurchaseId > 0
+    selectedPackage?.id === sandboxPackageId
 
   return (
     <div className="page-content">
