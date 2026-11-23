@@ -1,5 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
+import { listActivePackages } from '../api.js'
 import '../styles/packages.css'
+
+function toCatalogueRow(record) {
+  const category = record.service_type === 'hotspot'
+    ? 'Hotspot Captive'
+    : record.service_type.split(/[_ -]+/).filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+
+  return {
+    id: String(record.id),
+    name: record.name,
+    category,
+    price: record.price,
+    duration: `${record.duration_minutes} min`,
+    speed: `${record.download_speed_mbps} Mbps / ${record.upload_speed_mbps} Mbps`,
+    quota: 'Unavailable',
+    status: record.is_active ? 'Active' : 'Inactive',
+    description: record.description,
+    icon: record.service_type === 'hotspot' ? 'wifi' : 'lan',
+  }
+}
 
 const demoPackages = [
   {
@@ -188,7 +210,7 @@ function PackageDialog({ packageItem, onClose, onSave }) {
   )
 }
 
-function PackageRow({ item, onEdit }) {
+function PackageRow({ item, onEdit, editable }) {
   const inactive = item.status === 'Inactive'
   return (
     <tr className={inactive ? 'package-row-inactive' : undefined}>
@@ -198,6 +220,7 @@ function PackageRow({ item, onEdit }) {
           <div>
             <strong>{item.name}</strong>
             <span className="package-type">{item.category}</span>
+            {!editable && item.description && <span className="package-type">{item.description}</span>}
           </div>
           {item.badge && <span className="package-badge">{item.badge}</span>}
         </div>
@@ -208,7 +231,7 @@ function PackageRow({ item, onEdit }) {
       <td><span className={`package-quota${item.quota === 'Unlimited' && !inactive ? ' unlimited' : ''}`}>{item.quota}</span></td>
       <td><span className={`package-status${inactive ? ' inactive' : ''}`}>{item.status}</span></td>
       <td className="package-actions">
-        <button type="button" className="package-edit-button" aria-label={`Edit package: ${item.name}`} onClick={(event) => onEdit(item, event.currentTarget)}>Edit</button>
+        <button type="button" className="package-edit-button" aria-label={`Edit package: ${item.name}`} disabled={!editable} onClick={(event) => onEdit(item, event.currentTarget)}>Edit</button>
       </td>
     </tr>
   )
@@ -226,8 +249,34 @@ function PackageFilters({ label, options, selected, onSelect }) {
   )
 }
 
-export default function PackagesPage() {
-  const [packages, setPackages] = useState(demoPackages)
+export default function PackagesPage({ live = false }) {
+  const showDemo = !live && demoDataEnabled
+  const [packages, setPackages] = useState(() => showDemo ? demoPackages : [])
+  const [request, setRequest] = useState({ loading: live })
+  const [reload, setReload] = useState(0)
+
+  useEffect(() => {
+    if (!live) return undefined
+    const controller = new AbortController()
+    const { signal } = controller
+    listActivePackages({ signal }).then((records) => {
+      if (signal.aborted) return
+      setPackages(records.filter((record) => record.is_active === true).map(toCatalogueRow))
+      setRequest({ loading: false })
+    }).catch(() => {
+      if (signal.aborted) return
+      setRequest({ loading: false, error: 'Could not load packages. Please try again.' })
+    })
+    return () => controller.abort()
+  }, [live, reload])
+
+  function refreshCatalogue() {
+    setRequest({ loading: true })
+    setPackages([])
+    setStatus('all')
+    setType('all')
+    setReload((attempt) => attempt + 1)
+  }
   const [status, setStatus] = useState('all')
   const [type, setType] = useState('all')
   const [query, setQuery] = useState('')
@@ -239,19 +288,21 @@ export default function PackagesPage() {
   const activeCount = packages.filter((item) => item.status === 'Active').length
   const statusOptions = [
     { value: 'all', text: `All (${packages.length})` },
-    ...statuses.map((value) => ({
+    ...(live ? ['Active'] : statuses).map((value) => ({
       value,
       text: `${value} (${value === 'Active' ? activeCount : packages.length - activeCount})`,
     })),
   ]
-  const typeOptions = [{ value: 'all', text: 'All Types' }, ...packageTypes.map((value) => ({ value, text: value }))]
+  const categories = live ? [...new Set(packages.map((item) => item.category))] : packageTypes
+  const typeOptions = [{ value: 'all', text: 'All Types' }, ...categories.map((value) => ({ value, text: value }))]
   const visiblePackages = packages.filter((item) =>
     (status === 'all' || item.status === status)
     && (type === 'all' || item.category === type)
-    && [item.name, item.id, item.speed, `KES ${item.price}`].some((value) => value.toLowerCase().includes(search))
+    && [item.name, item.id, item.speed, item.description, `KES ${item.price}`].some((value) => String(value ?? '').toLowerCase().includes(search))
   )
 
   function openDialog(packageItem, trigger) {
+    if (!showDemo) return
     triggerRef.current = trigger
     setDialog({ packageItem })
   }
@@ -282,9 +333,9 @@ export default function PackagesPage() {
       <header className="page-heading packages-heading">
         <div>
           <div className="package-title"><h1>Packages</h1><span>Tariff Engine</span></div>
-          <p className="page-description">Create and manage available internet packages, captive tiers, and rate limit quotas.</p>
+          <p className="page-description">{live ? 'Review the active packages offered in the customer portal.' : 'Create and manage available internet packages, captive tiers, and rate limit quotas.'}</p>
         </div>
-        <button type="button" className="package-primary-button package-create-button" onClick={(event) => openDialog(null, event.currentTarget)}>
+        <button type="button" className="package-primary-button package-create-button" disabled={!showDemo} onClick={(event) => openDialog(null, event.currentTarget)}>
           <span className="material-symbols-outlined" aria-hidden="true">add</span>
           Add Package
         </button>
@@ -293,8 +344,10 @@ export default function PackagesPage() {
       <div className="package-toolbar">
         <div className="package-filter-stack">
           <div className="package-filter-line">
-            <span className="package-active-count">{activeCount} Active {activeCount === 1 ? 'Package' : 'Packages'}</span>
-            <PackageFilters label="Filter packages by status" options={statusOptions} selected={status} onSelect={setStatus} />
+            <span className="package-active-count">
+              {request.loading || request.error ? 'Active packages' : `${activeCount} Active ${activeCount === 1 ? 'Package' : 'Packages'}`}
+            </span>
+            {!request.loading && !request.error && <PackageFilters label="Filter packages by status" options={statusOptions} selected={status} onSelect={setStatus} />}
           </div>
           <PackageFilters label="Filter packages by type" options={typeOptions} selected={type} onSelect={setType} />
         </div>
@@ -326,18 +379,32 @@ export default function PackagesPage() {
               </tr>
             </thead>
             <tbody>
-              {visiblePackages.map((item) => <PackageRow key={item.id} item={item} onEdit={openDialog} />)}
-              {visiblePackages.length === 0 && <tr><td colSpan={7} className="package-empty">No matching packages. Try another search or filter.</td></tr>}
+              {visiblePackages.map((item) => <PackageRow key={item.id} item={item} onEdit={openDialog} editable={showDemo} />)}
+              {visiblePackages.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="package-empty">
+                    {request.loading ? <span role="status">Loading packages…</span> : request.error ? (
+                      <>
+                        <p role="alert">{request.error}</p>
+                        <button type="button" className="package-primary-button" onClick={refreshCatalogue}>Retry</button>
+                      </>
+                    ) : live && packages.length === 0 ? 'No active packages are available.'
+                      : !live && !showDemo ? 'Package records unavailable.'
+                      : 'No matching packages. Try another search or filter.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <footer className="package-table-footer">
-          <span role="status">Showing {visiblePackages.length} of {packages.length} packages</span>
-          <span>Demo data · Changes are temporary</span>
+          <span role="status">{!request.loading && !request.error && `Showing ${visiblePackages.length} of ${packages.length} packages`}</span>
+          {live && <span>Active catalog · Editing unavailable</span>}
+          {showDemo && <span>Demo data · Changes are temporary</span>}
         </footer>
       </section>
 
-      {dialog && (
+      {showDemo && dialog && (
         <PackageDialog packageItem={dialog.packageItem} onClose={closeDialog} onSave={savePackage} />
       )}
     </div>
