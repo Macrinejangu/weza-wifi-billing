@@ -1,4 +1,7 @@
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint, Column, DateTime, ForeignKey, Index, Integer, String,
+    UniqueConstraint, text,
+)
 from sqlalchemy.sql import func
 from app.db.base import Base
 
@@ -10,6 +13,14 @@ class ActivationAttempt(Base):
     __table_args__ = (
         UniqueConstraint("session_id", "attempt_number", name="uq_attempt_number"),
         CheckConstraint("status IN ('started', 'succeeded', 'failed')", name="ck_attempts_status"),
+        # At most ONE in-flight attempt per session. The database, not Python,
+        # stops two workers starting activation for the same session at once.
+        Index(
+            "uq_one_started_attempt",
+            "session_id",
+            unique=True,
+            postgresql_where=text("status = 'started'"),
+        ),
     )
 
     id = Column(Integer, primary_key=True)

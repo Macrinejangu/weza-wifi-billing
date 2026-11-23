@@ -32,6 +32,7 @@ from app.payments.settlement_plan import SettlementAction, requires_status_query
 from app.payments.statuses import PaymentStatus
 from app.services.payment_event_outcome import mark_event_outcome
 from app.services.payment_event_service import EventOutcome, EventSource, record_received_event
+from app.services.payment_fulfilment import fulfil_payment
 from app.services.payment_settlement import UNCONFIRMED_QUERY_NOTE, settle_payment
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,9 @@ def process_callback(
         callback=callback,
         raw_payload=raw_payload,
     )
+    if result.action == SettlementAction.APPLY_SUCCESS:
+        fulfil_payment(db, payment_id)
+
     logger.info(
         "callback processed: payment_id=%s checkout_request_id=%s verdict=%s action=%s",
         payment_id, callback.checkout_request_id, verdict.value, result.action.value,

@@ -3,7 +3,7 @@ from typing import Callable
 
 from sqlalchemy.orm import Session
 
-from app.models import ActivationAttempt, Payment, WiFiSession
+from app.models import ActivationAttempt, Payment, Subscription, WiFiSession
 from app.services.access_auth import (
     activate_access_device,
     get_access_authenticator,
@@ -17,6 +17,8 @@ def create_session(
     payment_id: int,
     mac: str | None = None,
     ip: str | None = None,
+    *,
+    verified_checkout: bool = False,
 ) -> WiFiSession:
     """One session per payment, and only for a payment M-Pesa confirmed."""
     payment = db.get(Payment, payment_id, with_for_update=True)
@@ -37,6 +39,22 @@ def create_session(
 
     session = db.query(WiFiSession).filter_by(payment_id=payment.id).first()
 
+    subscription = None
+    if verified_checkout:
+        if payment.paid_at is None:
+            raise ValueError("Verified payment timestamp is required")
+        subscription = db.query(Subscription).filter_by(payment_id=payment_id).one_or_none()
+        if subscription is None:
+            subscription = Subscription(
+                user_id=purchase.user_id,
+                package_id=purchase.package_id,
+                payment_id=payment_id,
+                start_date=payment.paid_at,
+                end_date=payment.paid_at + timedelta(minutes=purchase.duration_minutes),
+                status="active",
+            )
+            db.add(subscription)
+
     if session is None:
         session = WiFiSession(
             user_id=payment.purchase.user_id,
@@ -48,6 +66,8 @@ def create_session(
         )
         db.add(session)
 
+    if subscription is not None:
+        session.subscription = subscription
     db.commit()
     return session
 
@@ -60,8 +80,8 @@ def activate_session(
     """
     Activate the purchased access service.
 
-    The session timer starts only after the selected access provider
-    confirms successful activation.
+    The provider confirms access separately from the subscription timer.
+    Legacy sessions without subscriptions keep their activation-based timer.
     """
     session = db.get(WiFiSession, session_id, with_for_update=True)
 
@@ -81,6 +101,12 @@ def activate_session(
 
     purchase = session.payment.purchase
     reconciling = attempt is not None
+    subscription = session.subscription
+    if subscription is not None and subscription.end_date <= datetime.now(timezone.utc) and not reconciling:
+        session.status = "EXPIRED"
+        subscription.status = "expired"
+        db.commit()
+        return session
 
     if attempt is None:
         attempt = ActivationAttempt(
@@ -162,10 +188,12 @@ def activate_session(
 
         session.status = "ACTIVE"
         session.activation_status = "succeeded"
-        session.started_at = datetime.now(timezone.utc)
-        session.expires_at = session.started_at + timedelta(
-            minutes=purchase.duration_minutes
-        )
+        if subscription is not None:
+            session.started_at = subscription.start_date
+            session.expires_at = subscription.end_date
+        else:
+            session.started_at = datetime.now(timezone.utc)
+            session.expires_at = session.started_at + timedelta(minutes=purchase.duration_minutes)
 
     attempt.completed_at = datetime.now(timezone.utc)
 
