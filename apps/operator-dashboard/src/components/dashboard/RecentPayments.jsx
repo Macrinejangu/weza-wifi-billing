@@ -61,7 +61,23 @@ function StatusBadge({ status, type }) {
   )
 }
 
-export default function RecentPayments() {
+const dateTime = new Intl.DateTimeFormat('en-KE', {
+  dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi',
+})
+
+export default function RecentPayments({ report }) {
+  const rows = report ? (report.data ?? []).map((payment) => ({
+    id: payment.id,
+    reference: payment.mpesa_receipt_number || payment.checkout_request_id || `Payment #${payment.id}`,
+    customer: `Purchase #${payment.purchase_id}`,
+    phone: payment.phone_number,
+    package: 'Unavailable',
+    amount: `KES ${payment.amount.toLocaleString('en-KE')}`,
+    paymentStatus: { successful: 'Confirmed', pending: 'Pending', failed: 'Failed', expired: 'Expired' }[payment.status] ?? payment.status,
+    activationStatus: 'Unavailable',
+    time: payment.created_at ? dateTime.format(new Date(payment.created_at)) : 'Unavailable',
+  })) : payments
+
   return (
     <section className="payments-section">
       <div className="payments-heading">
@@ -69,18 +85,18 @@ export default function RecentPayments() {
           <p className="section-eyebrow">TRANSACTION ACTIVITY</p>
           <h2>Recent Payments</h2>
           <p className="section-description">
-            Latest sample subscriber transactions
+            {report ? 'Latest recorded payment attempts' : 'Latest sample subscriber transactions'}
           </p>
         </div>
 
-        <span className="demo-data-label">DEMO DATA</span>
+        {!report && <span className="demo-data-label">DEMO DATA</span>}
       </div>
 
       <div className="payments-table-wrapper">
         <table className="payments-table">
           <thead>
             <tr>
-              <th scope="col">TRANSACTION / CUSTOMER</th>
+              <th scope="col">{report ? 'TRANSACTION / PURCHASE' : 'TRANSACTION / CUSTOMER'}</th>
               <th scope="col">PACKAGE</th>
               <th scope="col">AMOUNT</th>
               <th scope="col">PAYMENT</th>
@@ -90,8 +106,8 @@ export default function RecentPayments() {
           </thead>
 
           <tbody>
-            {payments.map((payment) => (
-              <tr key={payment.reference}>
+            {rows.map((payment) => (
+              <tr key={payment.id ?? payment.reference}>
                 <td>
                   <div className="payment-customer">
                     <strong>{payment.customer}</strong>
@@ -120,15 +136,25 @@ export default function RecentPayments() {
                 <td className="payment-time">{payment.time}</td>
               </tr>
             ))}
+            {report && rows.length === 0 && (
+              <tr><td colSpan={6}>
+                {report.error ? <span role="alert">Could not load recent payments. Use Refresh to try again.</span>
+                  : <span role="status">{report.loading ? 'Loading recent payments…' : 'No payment records.'}</span>}
+              </td></tr>
+            )}
           </tbody>
         </table>
       </div>
 
       <div className="payments-footer">
-        <span>Showing 5 of 814 sample transactions today</span>
-        <p className="payments-footnote">
-          Illustrative transactions only. No live payment records are connected.
-        </p>
+        {report ? (
+          rows.length > 0 && <span>Showing {rows.length} recent payment attempts · EAT</span>
+        ) : (
+          <>
+            <span>Showing 5 of 814 sample transactions today</span>
+            <p className="payments-footnote">Illustrative transactions only. No live payment records are connected.</p>
+          </>
+        )}
       </div>
     </section>
   )

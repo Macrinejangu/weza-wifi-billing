@@ -1,8 +1,13 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.core.security import create_token, hash_password
-from app.models import User
+from app.api import staff as staff_api
+from app.models import User, WiFiSession
+
+from test_payment_settlement import make_payment, make_purchase
 
 PASSWORD = "correct-horse-battery"
 
@@ -210,3 +215,63 @@ def test_customer_directory_applies_search_status_and_pagination(client, db):
     assert ids(q=str(first.id)) == [first.id]
     assert ids(q="%") == []
     assert client.get("/api/customers?limit=101", headers=headers).status_code == 422
+
+
+
+def test_overview_requires_active_staff(client, db):
+    customer = add_user(db, role="customer")
+    suspended = add_user(db, status="suspended", email="suspended@weza.local")
+    assert client.get("/api/overview").status_code == 401
+    assert client.get("/api/overview", headers={"Authorization": f"Bearer {create_token(customer.id)}"}).status_code == 403
+    assert client.get("/api/overview", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
+
+
+def test_overview_counts_sandbox_receipts_and_current_session_states(client, db, user, package, monkeypatch):
+    staff = add_user(db)
+    now = datetime(2026, 11, 23, 4, tzinfo=UTC)
+    midnight = datetime(2026, 11, 22, 21, tzinfo=UTC)
+    provider = {"Body": {"stkCallback": {"ResultCode": 0}}}
+    original_overview = staff_api.read_overview
+    monkeypatch.setattr(staff_api, "read_overview", lambda session, _: original_overview(session, now))
+
+    def add_payment(key, *, status="successful", paid_at=None, raw_callback=None):
+        purchase = make_purchase(db, user, package, key=key)
+        payment = make_payment(
+            db, purchase, checkout=key, status=status,
+            receipt=f"receipt-{key}" if status == "successful" else None,
+        )
+        payment.paid_at = paid_at
+        payment.raw_callback = raw_callback
+        db.commit()
+        return payment
+
+    active_payment = add_payment("today-provider", paid_at=midnight, raw_callback=provider)
+    expired_payment = add_payment("yesterday-provider", paid_at=midnight - timedelta(seconds=1), raw_callback=provider)
+    failed_payment = add_payment("today-mock", paid_at=now, raw_callback={"mock": True})
+    ended_payment = add_payment("today-ended", paid_at=now)
+    add_payment("pending", status="pending")
+    add_payment("failed", status="failed")
+
+    def add_session(payment, status, activation, *, expires=None, ended=None):
+        db.add(WiFiSession(
+            payment_id=payment.id, user_id=user.id, package_id=package.id,
+            status=status, activation_status=activation,
+            started_at=now - timedelta(hours=1) if expires else None,
+            expires_at=expires, ended_at=ended,
+        ))
+
+    add_session(active_payment, "ACTIVE", "succeeded", expires=now + timedelta(hours=1))
+    add_session(expired_payment, "ACTIVE", "succeeded", expires=now)
+    add_session(ended_payment, "ACTIVE", "succeeded", expires=now + timedelta(hours=1), ended=now)
+    add_session(failed_payment, "FAILED", "failed")
+    db.commit()
+
+    response = client.get("/api/overview", headers={"Authorization": f"Bearer {create_token(staff.id)}"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "sandbox_settled_today_kes": active_payment.amount,
+        "sandbox_settled_today_count": 1,
+        "active_session_records": 1,
+        "pending_payments": 1,
+        "failed_activations": 1,
+    }

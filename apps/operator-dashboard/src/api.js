@@ -123,3 +123,11 @@ export function listStaffCustomers(accessToken, { limit = 50, offset = 0, status
     errorMessage: 'Could not load customers. Please try again.',
   })
 }
+
+
+export function getStaffOverview(accessToken, { signal } = {}) {
+  return readStaffData('/api/overview', accessToken, {
+    signal,
+    errorMessage: 'Could not load overview totals. Please try again.',
+  })
+}
