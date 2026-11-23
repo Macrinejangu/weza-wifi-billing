@@ -241,10 +241,14 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     from app.services.router import RouterActivationUnconfirmed
 
     monkeypatch.setenv("ROUTER_MODE", "mikrotik")
-    payment = paid_payment(db, user, package)
+    purchase, _ = create_purchase(
+        db, user.id, package.id, "key-12345",
+        device_mac="AA:BB:CC:DD:EE:FF", device_ip="10.20.0.254",
+    )
+    payment = process_mock_payment(db, create_payment(db, purchase.id, PHONE).id, True)
     payment.raw_callback = {"test": "verified payment fixture"}
     db.commit()
-    session = create_session(db, payment.id, "AA:BB:CC:DD:EE:FF", "10.20.0.254")
+    session = create_session(db, payment.id)
     calls = []
 
     def activate_once(**kwargs):
