@@ -153,3 +153,11 @@ def test_malformed_password_hash_returns_generic_login_failure(client, db, store
     response = login(client)
     assert response.status_code == 401
     assert response.json() == {"detail": "Invalid email or password"}
+
+
+def test_session_detail_and_activation_are_staff_only(client, db):
+    customer = add_user(db, role="customer", email="c@weza.local")
+    headers = {"Authorization": f"Bearer {create_token(customer.id)}"}
+    for send, path in [(client.get, "/api/sessions/1"), (client.post, "/api/sessions/1/activate")]:
+        assert send(path).status_code == 401
+        assert send(path, headers=headers).status_code == 403
