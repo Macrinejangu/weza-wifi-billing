@@ -16,15 +16,17 @@ could trigger an M-Pesa prompt for it. Add an ownership check when customer
 authentication exists.
 """
 import logging
+import os
 from functools import lru_cache
 
 import httpx
-from fastapi import APIRouter, Depends
+from dotenv import load_dotenv
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.config import daraja_settings
+from app.config import ROOT_ENV, daraja_settings
 from app.db.session import get_db
 from app.integrations.mpesa.client import DarajaClient
 from app.payments.payment_service_errors import (
@@ -42,7 +44,18 @@ from app.services.mpesa_payment_service import initiate_payment
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/payments", tags=["M-Pesa payments"])
+
+def require_sandbox_payments_enabled() -> None:
+    load_dotenv(ROOT_ENV)
+    if os.getenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", "false").lower() != "true":
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+router = APIRouter(
+    prefix="/api/payments",
+    tags=["M-Pesa payments"],
+    dependencies=[Depends(require_sandbox_payments_enabled)],
+)
 
 PROMPT_MESSAGE = "Check your phone and enter your M-Pesa PIN to complete the payment."
 
