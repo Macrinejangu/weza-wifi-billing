@@ -107,3 +107,41 @@ Payment status is separate from activation status. `successful` never means the 
 
 - There is no customer login yet. Anyone who guesses a purchase id could trigger a prompt for it. An ownership check is needed once customer authentication exists.
 - Device verification before the prompt (WEZA-53) is not wired in yet.
+
+## POST /api/payments/mpesa/callback/{token}
+
+Receives Daraja's STK Push result. Implemented in WEZA-50. Called by Safaricom, never by our frontends, and hidden from `/docs`.
+
+### Protection
+
+Callbacks are not signed, so the endpoint relies on these checks, in this order:
+
+1. Optional source-IP allowlist (`CALLBACK_IP_CHECK_ENABLED`, off by default).
+2. A secret token in the URL path (`DARAJA_CALLBACK_TOKEN`). `DARAJA_CALLBACK_URL` must end with the same token.
+3. A body size limit of 64 KB.
+4. The callback must match a payment we created: both request IDs, the amount and the phone number.
+5. Success and failure are both confirmed with the STK status query before the payment changes. Unknown or failed queries leave the payment `pending`.
+
+A wrong IP, a wrong token and an unconfigured endpoint all get the same empty 404.
+
+### Responses
+
+| HTTP | Meaning |
+| --- | --- |
+| 200 | The message was stored and handled. Also returned for messages we rejected, because Safaricom cannot act on our reasons. Body: `{"ResultCode": 0, "ResultDesc": "Accepted"}`. |
+| 404 | IP, token or configuration check failed. Empty body. |
+| 413 | Body over 64 KB or a bad `Content-Length`. Nothing is stored. |
+| 503 | The message could not be recorded (database down). |
+| 500 | Our own bug. Generic body, and the audit event stays `received`. |
+
+### Audit trail
+
+Every accepted message is saved in `payment_events` before processing and ends as `applied`, `duplicate`, `rejected` or `unmatched`. A duplicate delivery changes nothing.
+
+### Unverified (not confirmed from official Daraja pages)
+
+- The official STK Push page we checked does not state what reply the endpoint must return. We return 200 with the JSON above.
+- Only result codes 0 and 1032 are official. Other codes map to `unknown`.
+- The 12 callback IPs have not been tested against the sandbox, so the IP check stays off by default.
+- Whether the sandbox sends callbacks to a tunnel URL has not been tested.
+- uvicorn's access log can print the request path, which contains the token. Filter that log or rotate the token if logs leak.
