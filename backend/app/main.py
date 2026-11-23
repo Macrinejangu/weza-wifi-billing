@@ -13,6 +13,8 @@ from app.api.router import router as router_status_router
 from app.api.sessions import router as sessions_router
 from app.api.staff import router as staff_router
 
+from app.api.routes.payments import router as mpesa_payments_router
+
 app = FastAPI(title="Weza Wi-Fi Billing API")
 
 # Lets the two React apps (customer portal :5173, operator dashboard :5174) call this API.
@@ -27,6 +29,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(staff_router)
+app.include_router(mpesa_payments_router)
 app.include_router(router_status_router)
 app.include_router(packages_router, prefix="/api")
 app.include_router(billing_router, dependencies=[Depends(require_mock_mode)])
