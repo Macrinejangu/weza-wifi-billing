@@ -107,6 +107,8 @@ export default function App() {
           <SessionsPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'packages' ? (
           <PackagesPage live />
+        ) : staffPage === 'staff-profile' ? (
+          <StaffProfilePage operator={operator} staff={staff} onSignOut={signOut} />
         ) : (
           <PaymentsPage accessToken={accessToken} onSignOut={signOut} />
         )}
