@@ -103,7 +103,9 @@ export default function App() {
 
     return (
       <DashboardLayout operator={operator} activePage={staffPage} onNavigate={setStaffPage} onSignOut={signOut}>
-        {staffPage === 'sessions' ? (
+        {staffPage === 'overview' ? (
+          <DashboardPage operator={operator} accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'sessions' ? (
           <SessionsPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'packages' ? (
           <PackagesPage live />
