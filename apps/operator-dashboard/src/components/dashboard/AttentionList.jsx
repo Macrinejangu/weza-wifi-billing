@@ -28,7 +28,20 @@ const issues = [
   },
 ]
 
-export default function AttentionList() {
+const dateTime = new Intl.DateTimeFormat('en-KE', {
+  dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi',
+})
+
+export default function AttentionList({ report, onOpenIssues }) {
+  const entries = report ? (report.data ?? []).map((record) => ({
+    id: `Session #${record.session_id}`,
+    title: 'Activation failed',
+    description: record.failure_reason,
+    payment: `Payment #${record.payment_id}`,
+    time: `${dateTime.format(new Date(record.updated_at))} EAT`,
+    icon: 'warning',
+  })) : issues
+
   return (
     <section className="attention-section">
       <div className="attention-heading">
@@ -36,15 +49,22 @@ export default function AttentionList() {
           <p className="section-eyebrow">OPERATIONS</p>
           <h2>Requires Attention</h2>
           <p className="section-description">
-            Sample issues that may need operator review
+            {report ? 'Latest paid sessions with failed activation' : 'Sample issues that may need operator review'}
           </p>
         </div>
 
-        <span className="demo-data-label">DEMO DATA</span>
+        {report ? (
+          onOpenIssues && <button className="payment-secondary-button" type="button" onClick={onOpenIssues}>View Connection Issues</button>
+        ) : <span className="demo-data-label">DEMO DATA</span>}
       </div>
 
       <div className="attention-list">
-        {issues.map((issue) => (
+        {report && entries.length === 0 && (
+          report.error
+            ? <p role="alert">Could not load connection issues. Use Refresh to try again.</p>
+            : <p role="status">{report.loading ? 'Loading connection issues…' : 'No paid sessions with failed activation were found.'}</p>
+        )}
+        {entries.map((issue) => (
           <article className="attention-item" key={issue.id}>
             <div className="attention-icon">
               <span className="material-symbols-outlined">
@@ -55,21 +75,20 @@ export default function AttentionList() {
             <div className="attention-details">
               <div className="attention-title-row">
                 <h3>{issue.title}</h3>
-                <span className={`priority-badge priority-${issue.priority.toLowerCase()}`}>
-                  {issue.priority}
-                </span>
+                {issue.priority && (
+                  <span className={`priority-badge priority-${issue.priority.toLowerCase()}`}>{issue.priority}</span>
+                )}
               </div>
 
               <p>{issue.description}</p>
 
               <div className="attention-meta">
                 <span>{issue.id}</span>
+                {issue.payment && <span>{issue.payment}</span>}
                 <span>{issue.time}</span>
               </div>
 
-              <span className="attention-action-label">
-                {issue.action}
-              </span>
+              {issue.action && <span className="attention-action-label">{issue.action}</span>}
             </div>
           </article>
         ))}
