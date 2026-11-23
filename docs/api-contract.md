@@ -107,3 +107,53 @@ Payment status is separate from activation status. `successful` never means the 
 
 - There is no customer login yet. Anyone who guesses a purchase id could trigger a prompt for it. An ownership check is needed once customer authentication exists.
 - Device verification before the prompt (WEZA-53) is not wired in yet.
+
+## POST /api/payments/mpesa/callback/{token}
+
+Receives Daraja's STK Push result. Implemented in WEZA-50. Called by Safaricom, never by our frontends, and hidden from `/docs`.
+
+### Protection
+
+Callbacks are not signed, so the endpoint relies on these checks, in this order:
+
+1. Optional source-IP allowlist (`CALLBACK_IP_CHECK_ENABLED`, off by default).
+2. A secret token in the URL path (`DARAJA_CALLBACK_TOKEN`). `DARAJA_CALLBACK_URL` must end with the same token.
+3. A body size limit of 64 KB.
+4. The callback must match a payment we created: both request IDs, the amount and the phone number.
+5. Success and failure are both confirmed with the STK status query before the payment changes. Unknown or failed queries leave the payment `pending`.
+
+A wrong IP, a wrong token and an unconfigured endpoint all get the same empty 404.
+
+### Responses
+
+| HTTP | Meaning |
+| --- | --- |
+| 200 | The message was stored and handled. Also returned for messages we rejected, because Safaricom cannot act on our reasons. Body: `{"ResultCode": 0, "ResultDesc": "Accepted"}`. |
+| 404 | IP, token or configuration check failed. Empty body. |
+| 413 | Body over 64 KB or a bad `Content-Length`. Nothing is stored. |
+| 503 | The message could not be recorded (database down). |
+| 500 | Our own bug. Generic body, and the audit event stays `received`. |
+
+### Audit trail
+
+Every accepted message is saved in `payment_events` before processing and ends as `applied`, `duplicate`, `rejected` or `unmatched`. A duplicate delivery changes nothing.
+
+### Replay a stored callback
+
+If a callback arrives before initiation saves the provider request IDs, its audit event is marked `unmatched`. If a matching callback cannot be confirmed because Daraja's query is inconclusive, the event records that reason. An authorized backend operator with access to the sandbox configuration and database can replay the original callback event:
+
+```sh
+cd backend
+python -m app.replay_mpesa_callback EVENT_ID
+```
+
+Replay uses the stored callback, repeats the same verification and status query, and records a separate audit event linked to the original event ID in the payload. It sends no STK prompt. Run it once the initiation IDs are saved or the query service has recovered. The original audit row stays intact. Repeat replay cannot settle an already successful payment twice. Automated reconciliation is separate.
+
+Uvicorn access log entries for callback paths are suppressed. Configure proxy, tunnel and hosting access logs to omit or redact the secret path before exposing the route.
+
+### Unverified (not confirmed from official Daraja pages)
+
+- The official STK Push page we checked does not state what reply the endpoint must return. We return 200 with the JSON above.
+- Only result codes 0 and 1032 are official. Other codes map to `unknown`.
+- The 12 callback IPs have not been tested against the sandbox, so the IP check stays off by default.
+- Whether the sandbox sends callbacks to a tunnel URL has not been tested.
