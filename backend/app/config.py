@@ -6,6 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.engine import URL, make_url
 
+from app.payments.callback_ip_policy import CallbackIpPolicy
+from app.payments.callback_security import CallbackSecurityPolicy, is_valid_token_format
+
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
@@ -174,3 +177,62 @@ def weza_api_key() -> str:
         )
 
     return value
+
+
+def _read_bool(name: str, default: bool) -> bool:
+    """Read a strict true/false setting.
+
+    Anything else is an error, not "false": a typo such as "ture" must not
+    silently switch a security gate off.
+    """
+    raw = os.getenv(name)
+    if raw is None or not raw.strip():
+        return default
+    value = raw.strip().lower()
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise RuntimeError(f"{name} must be 'true' or 'false'.")
+
+
+def _read_list(name: str) -> list[str]:
+    """Read a comma-separated setting into a list, ignoring blanks."""
+    return [part.strip() for part in os.getenv(name, "").split(",") if part.strip()]
+
+
+def callback_security_policy() -> CallbackSecurityPolicy:
+    """Build the gates that protect the Daraja callback endpoint.
+
+    Callbacks are not signed, so the endpoint is protected by a secret token
+    in its URL path plus an optional source-IP check. Raises RuntimeError if
+    the token is missing or weak, or if the registered callback URL does not
+    end with the token (Safaricom would then call a path we reject).
+    Error messages never include the token's value.
+    """
+    load_dotenv(ROOT_ENV)
+
+    token = (os.getenv("DARAJA_CALLBACK_TOKEN") or "").strip()
+    if not token:
+        raise RuntimeError("Set DARAJA_CALLBACK_TOKEN in the repository root .env or shell.")
+    if not is_valid_token_format(token):
+        raise RuntimeError(
+            "DARAJA_CALLBACK_TOKEN must be 32 to 128 characters: "
+            "letters, digits, '-' and '_' only."
+        )
+
+    callback_url = (os.getenv("DARAJA_CALLBACK_URL") or "").strip()
+    if not callback_url.rstrip("/").endswith("/" + token):
+        raise RuntimeError(
+            "DARAJA_CALLBACK_URL must end with the DARAJA_CALLBACK_TOKEN value."
+        )
+
+    try:
+        ip_policy = CallbackIpPolicy.create(
+            enabled=_read_bool("CALLBACK_IP_CHECK_ENABLED", default=False),
+            trusted_proxies=_read_list("CALLBACK_TRUSTED_PROXIES"),
+        )
+        return CallbackSecurityPolicy(ip_policy=ip_policy, token=token)
+    except ValueError as error:
+        # The ValueError texts name the setting, never a secret value.
+        raise RuntimeError(f"Invalid callback security settings: {error}") from None
