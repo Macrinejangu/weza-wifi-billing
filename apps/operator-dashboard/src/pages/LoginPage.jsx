@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import '../styles/login.css'
 
-export default function LoginPage({ onPreviewDashboard, operator }) {
-  const [staffId, setStaffId] = useState('')
+export default function LoginPage({ onSignIn, onPreviewDashboard, operator }) {
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [passwordVisible, setPasswordVisible] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
   const [message, setMessage] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
   // Keep references so keyboard focus can enter the dialog and return to its trigger.
   const supportTriggerRef = useRef(null)
@@ -60,12 +61,21 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [supportOpen])
 
-  // Authentication is intentionally pending backend integration; credentials are not sent.
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
-    setMessage(
-      'The authentication service is not connected yet. Your credentials have not been submitted.',
-    )
+    if (submitting) return
+
+    setMessage('')
+    setSubmitting(true)
+    try {
+      await onSignIn(email, password)
+    } catch (error) {
+      setMessage(error instanceof TypeError || error instanceof SyntaxError
+        ? 'Staff sign-in is unavailable. Please try again.'
+        : error.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -90,15 +100,15 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <div className="login-field">
-            <label htmlFor="staff-identity">Staff Phone Number or ID</label>
+            <label htmlFor="staff-identity">Staff email</label>
             <input
               id="staff-identity"
-              name="staffIdentity"
-              type="text"
+              name="email"
+              type="email"
               autoComplete="username"
-              placeholder="e.g. +254 7XX XXX XXX or #STF-XXXX"
-              value={staffId}
-              onChange={(event) => setStaffId(event.target.value)}
+              placeholder="Enter your staff email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               required
             />
           </div>
@@ -137,15 +147,15 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
             <p>For authorized Weza staff only.</p>
           </div>
 
-          <button className="login-submit" type="submit">
-            <span>Sign In </span>
+          <button className="login-submit" type="submit" disabled={submitting}>
+            <span>{submitting ? 'Signing in…' : 'Sign In'}</span>
             <span className="material-symbols-outlined" aria-hidden="true">
               arrow_forward
             </span>
           </button>
 
           {message && (
-            <p className="login-feedback" role="status">
+            <p className="login-feedback" role="alert">
               {message}
             </p>
           )}
@@ -173,9 +183,6 @@ export default function LoginPage({ onPreviewDashboard, operator }) {
           </button>
         )}
 
-          <footer className="login-footer">
-          <p>Staff sign-in is currently unavailable.</p>
-        </footer>
       </section>
 
       {supportOpen && (
