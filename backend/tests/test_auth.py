@@ -369,3 +369,58 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
     assert issue["failure_reason"] == "The activation request timed out."
     assert "internal diagnostic text" not in response.text
     assert client.get("/api/connection-issues?offset=1", headers=headers).json() == []
+
+
+def test_customer_login_reads_only_its_own_profile(client, db):
+    customer = add_user(db, role="customer", email="pilot-customer@weza.local")
+    customer.full_name = "Pilot Customer"
+    customer.phone = "+254700000001"
+    db.commit()
+
+    login_response = client.post("/api/auth/customer/login", json={
+        "email": " PILOT-CUSTOMER@weza.local ", "password": PASSWORD,
+    })
+    assert login_response.status_code == 200
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    assert client.get("/api/auth/customer/me", headers=headers).json() == {
+        "id": customer.id, "full_name": "Pilot Customer",
+        "email": "pilot-customer@weza.local", "phone": "+254700000001",
+    }
+
+    customer.status = "suspended"
+    db.commit()
+    assert client.get("/api/auth/customer/me", headers=headers).status_code == 401
+
+
+def test_customer_login_rejects_ineligible_accounts_with_the_same_error(client, db):
+    add_user(db)
+    add_user(db, role="customer", email="customer@weza.local")
+    add_user(db, role="customer", status="suspended", email="suspended@weza.local")
+    for email, password in [
+        ("staff@weza.local", PASSWORD), ("customer@weza.local", "wrong"),
+        ("suspended@weza.local", PASSWORD), ("missing@weza.local", PASSWORD),
+    ]:
+        response = client.post("/api/auth/customer/login", json={"email": email, "password": password})
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Invalid email or password"}
+
+
+def test_customer_and_staff_tokens_are_not_interchangeable(client, db):
+    add_user(db)
+    customer = add_user(db, role="customer", email="customer@weza.local")
+    staff_token = login(client).json()["access_token"]
+    customer_response = client.post("/api/auth/customer/login", json={
+        "email": "customer@weza.local", "password": PASSWORD,
+    })
+    assert customer_response.status_code == 200
+    customer_headers = {"Authorization": f"Bearer {customer_response.json()['access_token']}"}
+
+    assert client.get("/api/auth/customer/me").status_code == 401
+    assert client.get("/api/auth/customer/me", headers={"Authorization": f"Bearer {staff_token}"}).status_code == 401
+    assert client.get("/api/auth/me", headers=customer_headers).status_code == 401
+    assert client.get("/api/payments", headers=customer_headers).status_code == 401
+
+    customer.role = "operator"
+    db.commit()
+    assert client.get("/api/auth/customer/me", headers=customer_headers).status_code == 401
+    assert client.get("/api/auth/me", headers=customer_headers).status_code == 401
