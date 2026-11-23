@@ -6,7 +6,6 @@ import CustomersPage, { initialCustomers } from './pages/CustomersPage.jsx'
 import CustomerProfilePage from './pages/CustomerProfilePage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
-import StaffPaymentsPage from './pages/StaffPaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
 import ActivityHistoryPage from './pages/ActivityHistoryPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
@@ -29,6 +28,7 @@ function getTokenExpiry(accessToken) {
 
 export default function App() {
   const [staffSession, setStaffSession] = useState(null)
+  const [staffPage, setStaffPage] = useState('payments')
   const expiresAt = staffSession?.expiresAt
   const signOut = useCallback(() => setStaffSession(null), [])
 
@@ -48,6 +48,7 @@ export default function App() {
       throw new Error('Your staff session is unavailable. Please sign in again.')
     }
 
+    setStaffPage('payments')
     setStaffSession({ accessToken, staff, expiresAt: expiry })
   }
 
@@ -101,8 +102,12 @@ export default function App() {
     }
 
     return (
-      <DashboardLayout operator={operator} activePage="payments" onSignOut={signOut}>
-        <StaffPaymentsPage accessToken={accessToken} onSignOut={signOut} />
+      <DashboardLayout operator={operator} activePage={staffPage} onNavigate={setStaffPage} onSignOut={signOut}>
+        {staffPage === 'sessions' ? (
+          <SessionsPage accessToken={accessToken} onSignOut={signOut} />
+        ) : (
+          <PaymentsPage accessToken={accessToken} onSignOut={signOut} />
+        )}
       </DashboardLayout>
     )
   }

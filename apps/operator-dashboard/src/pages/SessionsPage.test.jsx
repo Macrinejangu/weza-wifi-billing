@@ -5,6 +5,11 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import SessionsPage from './SessionsPage.jsx'
 
+vi.hoisted(() => {
+  vi.stubEnv('DEV', true)
+  vi.stubEnv('VITE_USE_DEMO_DATA', 'true')
+})
+
 let container
 let root
 

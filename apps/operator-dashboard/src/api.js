@@ -47,7 +47,7 @@ export class StaffSessionError extends Error {
   }
 }
 
-async function readStaffPaymentData(path, accessToken, signal) {
+async function readStaffData(path, accessToken, { signal, errorMessage, notFoundMessage }) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
@@ -58,12 +58,12 @@ async function readStaffPaymentData(path, accessToken, signal) {
     throw new StaffSessionError()
   }
 
-  if (response.status === 404) {
-    throw new Error('This payment could not be found.')
+  if (response.status === 404 && notFoundMessage) {
+    throw new Error(notFoundMessage)
   }
 
   if (!response.ok) {
-    throw new Error('Could not load payment records. Please try again.')
+    throw new Error(errorMessage)
   }
 
   return response.json()
@@ -72,9 +72,25 @@ async function readStaffPaymentData(path, accessToken, signal) {
 export function listStaffPayments(accessToken, { limit = 50, offset = 0, status, signal } = {}) {
   const query = new URLSearchParams({ limit, offset })
   if (status) query.set('status', status)
-  return readStaffPaymentData(`/api/payments?${query}`, accessToken, signal)
+  return readStaffData(`/api/payments?${query}`, accessToken, {
+    signal,
+    errorMessage: 'Could not load payment records. Please try again.',
+  })
 }
 
 export function getStaffPayment(accessToken, paymentId, { signal } = {}) {
-  return readStaffPaymentData(`/api/payments/${encodeURIComponent(paymentId)}`, accessToken, signal)
+  return readStaffData(`/api/payments/${encodeURIComponent(paymentId)}`, accessToken, {
+    signal,
+    errorMessage: 'Could not load payment records. Please try again.',
+    notFoundMessage: 'This payment could not be found.',
+  })
+}
+
+export function listStaffSessions(accessToken, { limit = 50, offset = 0, status, signal } = {}) {
+  const query = new URLSearchParams({ limit, offset })
+  if (status) query.set('status', status)
+  return readStaffData(`/api/sessions?${query}`, accessToken, {
+    signal,
+    errorMessage: 'Could not load session records. Please try again.',
+  })
 }

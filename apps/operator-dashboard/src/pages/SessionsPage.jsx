@@ -1,5 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { demoDataEnabled } from '../../../shared/demoMode.js'
+import { getStaffPayment, listStaffSessions, StaffSessionError } from '../api.js'
 import '../styles/sessions.css'
+
+const pageSize = 50
+const sessionDate = new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' })
+const liveStatuses = { All: '', Active: 'ACTIVE', Activating: 'ACTIVATING', Failed: 'FAILED', Expired: 'EXPIRED' }
+
+function labelStatus(value) {
+  return value.toLowerCase().split('_').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
+
+function toSession(record) {
+  return {
+    id: record.id,
+    paymentId: record.payment_id,
+    name: `Customer #${record.user_id}`,
+    package: `Package #${record.package_id}`,
+    status: labelStatus(record.status),
+    activationStatus: labelStatus(record.activation_status),
+    failureReason: record.failure_reason,
+    started: record.started_at ? sessionDate.format(new Date(record.started_at)) : 'Unavailable',
+    expiry: record.expires_at ? sessionDate.format(new Date(record.expires_at)) : 'Unavailable',
+    remaining: 'Unavailable',
+    mac: 'Unavailable',
+    ip: 'Unavailable',
+    node: 'Unavailable',
+    download: 'Unavailable',
+    upload: 'Unavailable',
+    uptime: 'Unavailable',
+  }
+}
 
 const initialSessions = [
   {
@@ -106,7 +137,24 @@ function escapeCsv(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
 
-function SessionDetails({ session, opener, onClose }) {
+function SessionDetails({ session, opener, onClose, accessToken, onSignOut }) {
+  const [paymentStatus, setPaymentStatus] = useState('Loading…')
+  const paymentId = session.paymentId
+
+  useEffect(() => {
+    if (!accessToken) return undefined
+    const controller = new AbortController()
+    const { signal } = controller
+    getStaffPayment(accessToken, paymentId, { signal }).then((payment) => {
+      if (!signal.aborted) setPaymentStatus(labelStatus(payment.status))
+    }).catch((error) => {
+      if (signal.aborted) return
+      if (error instanceof StaffSessionError) onSignOut?.()
+      else setPaymentStatus('Unavailable')
+    })
+    return () => controller.abort()
+  }, [accessToken, onSignOut, paymentId])
+
   const closeButtonRef = useRef(null)
   const footerButtonRef = useRef(null)
 
@@ -160,7 +208,7 @@ function SessionDetails({ session, opener, onClose }) {
           <div className="session-modal-heading">
             <div>
               <h2 id="session-detail-title">Session Details</h2>
-              <p>Session ID #{session.id} · {session.name} · Demo</p>
+              <p>Session ID #{session.id} · {session.name}{!accessToken && ' · Demo'}</p>
             </div>
             <button ref={closeButtonRef} type="button" className="session-icon-button" aria-label="Close session details" onClick={onClose}>×</button>
           </div>
@@ -180,10 +228,13 @@ function SessionDetails({ session, opener, onClose }) {
                 </div>
                 <div className="session-drawer-person">
                   <span className="session-avatar" aria-hidden="true">{initials(session.name)}</span>
-                  <div><strong>{session.name}</strong><p>{session.phone}</p></div>
+                  <div><strong>{session.name}</strong><p>{accessToken ? `Payment #${paymentId}` : session.phone}</p></div>
                 </div>
                 <dl className="session-detail-grid">
                   <div><dt>Package</dt><dd>{session.package}</dd></div>
+                  {accessToken && <div><dt>Payment status</dt><dd>{paymentStatus}</dd></div>}
+                  {accessToken && <div><dt>Activation status</dt><dd>{session.activationStatus}</dd></div>}
+                  {accessToken && session.failureReason && <div><dt>Activation failure reason</dt><dd>{session.failureReason}</dd></div>}
                   <div><dt>Applied speeds</dt><dd>{featuredSample ? '10 Mbps / 5 Mbps' : 'Unavailable'}</dd></div>
                 </dl>
               </section>
@@ -199,11 +250,11 @@ function SessionDetails({ session, opener, onClose }) {
                     <progress aria-label="Sample quota consumption" value={3.42} max={10} />
                     <p>6.58 GB available · Sample quota</p>
                   </>
-                ) : <p>Quota and remaining allowance are unavailable for this sample session.</p>}
+                ) : <p>Quota and remaining allowance are unavailable.</p>}
               </section>
 
               <section className="session-detail-section">
-                <div className="session-drawer-card-heading"><h3>Lease Timeline</h3><span className="session-drawer-chip">Fixed sample</span></div>
+                <div className="session-drawer-card-heading"><h3>Lease Timeline</h3>{!accessToken && <span className="session-drawer-chip">Fixed sample</span>}</div>
                 <dl className="session-drawer-rows">
                   <div><dt>Start time</dt><dd>{session.started}</dd></div>
                   <div><dt>Expiry time</dt><dd>{session.expiry}</dd></div>
@@ -232,7 +283,7 @@ function SessionDetails({ session, opener, onClose }) {
                 </dl>
               </section>
               <section className="session-detail-section">
-                <h3>Sample Traffic</h3>
+                <h3>{accessToken ? 'Traffic' : 'Sample Traffic'}</h3>
                 <dl className="session-drawer-rows">
                   <div><dt>Download</dt><dd>{session.download}</dd></div>
                   <div><dt>Upload</dt><dd>{session.upload}</dd></div>
@@ -249,14 +300,19 @@ function SessionDetails({ session, opener, onClose }) {
             <button ref={footerButtonRef} type="button" className="session-secondary-button" onClick={onClose}>Close details</button>
           </div>
           <button type="button" className="session-drawer-disconnect" disabled>Terminate Session (Disconnect RADIUS)</button>
-          <p>Demo mode. Renewal and disconnect are unavailable.</p>
+          <p>{!accessToken && 'Demo mode. '}Renewal and disconnect are unavailable.</p>
         </footer>
       </section>
     </div>
   )
 }
 
-export default function SessionsPage() {
+export default function SessionsPage({ accessToken, onSignOut }) {
+  const live = Boolean(accessToken)
+  const showDemo = !live && demoDataEnabled
+  const [page, setPage] = useState(0)
+  const [reload, setReload] = useState(0)
+  const [liveList, setLiveList] = useState({ records: [], loading: true })
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
   const [selectedStatus, setSelectedStatus] = useState('All')
@@ -265,12 +321,37 @@ export default function SessionsPage() {
   const [details, setDetails] = useState(null)
   const [notice, setNotice] = useState('')
 
+  useEffect(() => {
+    if (!live) return undefined
+    const controller = new AbortController()
+    const { signal } = controller
+    listStaffSessions(accessToken, { status: liveStatuses[selectedStatus], limit: pageSize + 1, offset: page * pageSize, signal }).then((records) => {
+      if (!signal.aborted) {
+        setLiveList({ records: records.slice(0, pageSize).map(toSession), hasNext: records.length > pageSize })
+      }
+    }).catch((error) => {
+      if (signal.aborted) return
+      if (error instanceof StaffSessionError) onSignOut?.()
+      else setLiveList({ records: [], error: 'Could not load sessions. Please try again.' })
+    })
+    return () => controller.abort()
+  }, [accessToken, live, onSignOut, page, reload, selectedStatus])
+
+  function changeList(nextPage, nextStatus = selectedStatus) {
+    setDetails(null)
+    setLiveList({ records: [], loading: true })
+    setPage(nextPage)
+    setSelectedStatus(nextStatus)
+    setReload((attempt) => attempt + 1)
+  }
+
   const filteredSessions = useMemo(() => {
     const term = search.trim().toLowerCase()
 
-    return initialSessions.filter((session) => {
+    const records = live ? liveList.records : showDemo ? initialSessions : []
+    return records.filter((session) => {
       const matchesType = activeFilter === 'All' || session.type === activeFilter
-      const matchesStatus = selectedStatus === 'All' || session.status === selectedStatus
+      const matchesStatus = live || selectedStatus === 'All' || session.status === selectedStatus
       const matchesNode = selectedNode === 'All' || session.node === selectedNode
       const matchesSearch = !term || [
         session.name,
@@ -279,11 +360,12 @@ export default function SessionsPage() {
         session.mac,
         session.package,
         session.id,
-      ].some((value) => value.toLowerCase().includes(term))
+        session.paymentId,
+      ].some((value) => String(value ?? '').toLowerCase().includes(term))
 
       return matchesType && matchesStatus && matchesNode && matchesSearch
     })
-  }, [search, activeFilter, selectedStatus, selectedNode])
+  }, [search, activeFilter, selectedStatus, selectedNode, live, liveList.records, showDemo])
 
   function exportSessions() {
     const headers = ['Session ID', 'Customer', 'Phone', 'IP Address', 'MAC Address', 'Package', 'Session Type', 'Access Point', 'Uptime', 'Remaining', 'Connection Status', 'Sample Expiry']
@@ -319,13 +401,14 @@ export default function SessionsPage() {
     setSelectedStatus('All')
     setSelectedNode('All')
     setNotice('')
+    if (live) changeList(0, 'All')
   }
 
   return (
     <section className="sessions-page">
       <div className="page-heading sessions-heading">
         <div>
-          <p className="session-eyebrow">SESSIONS &amp; TELEMETRY / RADIUS ACCOUNTING</p>
+          <p className="session-eyebrow">{live ? 'SESSIONS & TELEMETRY' : 'SESSIONS & TELEMETRY / RADIUS ACCOUNTING'}</p>
           <h1>Sessions</h1>
           <p className="sessions-description">Monitor customer internet access and session status across access points.</p>
         </div>
@@ -340,19 +423,19 @@ export default function SessionsPage() {
             <span className="material-symbols-outlined">filter_list</span>
             Filter Telemetry
           </button>
-          <button type="button" className="session-primary-button session-export-button" onClick={exportSessions}>
+          <button type="button" className="session-primary-button session-export-button" disabled={!showDemo} onClick={exportSessions}>
             <span className="material-symbols-outlined">download</span>
             Export Active Sessions
           </button>
         </div>
       </div>
 
-      <div className="sessions-demo-notice">
+      {showDemo && <div className="sessions-demo-notice">
         <span className="material-symbols-outlined">info</span>
         <span><strong>DEMO MODE · NOT CONNECTED</strong>. Summary metrics are illustrative fleet totals, separate from the five sample rows. Session start times, uptime, and remaining time are fixed sample values.</span>
-      </div>
+      </div>}
 
-      <section className="sessions-summary-grid" aria-label="Illustrative session metrics">
+      <section className="sessions-summary-grid" aria-label={showDemo ? 'Illustrative session metrics' : 'Session summary'}>
         {summary.map((item) => (
           <article className="sessions-summary-card" key={item.label}>
             <div className={`sessions-summary-icon tone-${item.tone}`}>
@@ -360,8 +443,8 @@ export default function SessionsPage() {
             </div>
             <div>
               <p>{item.label}</p>
-              <strong>{item.value}</strong>
-              <span>{item.detail}</span>
+              <strong>{showDemo ? item.value : 'Unavailable'}</strong>
+              {showDemo && <span>{item.detail}</span>}
             </div>
           </article>
         ))}
@@ -375,35 +458,35 @@ export default function SessionsPage() {
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search by phone, IP, MAC or customer"
+              placeholder={live ? 'Search this page by session, payment or ID' : 'Search by phone, IP, MAC or customer'}
               aria-label="Search sessions"
             />
           </label>
           <div className="sessions-filter-controls">
             <div className="sessions-filter-pills" role="group" aria-label="Filter sessions by connection status">
-              {sessionStatuses.map((status) => (
+              {(live ? Object.keys(liveStatuses) : sessionStatuses).map((status) => (
                 <button
                   key={status}
                   type="button"
                   className={selectedStatus === status ? 'active' : ''}
                   aria-pressed={selectedStatus === status}
-                  onClick={() => setSelectedStatus(status)}
+                  onClick={() => live ? status !== selectedStatus && changeList(0, status) : setSelectedStatus(status)}
                 >
                   {status}
                 </button>
               ))}
             </div>
-            <select aria-label="Filter sessions by package type" value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)}>
+            <select disabled={!showDemo} aria-label="Filter sessions by package type" value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)}>
               <option value="All">All Packages</option>
-              {packageTypes.map((type) => <option key={type}>{type}</option>)}
+              {showDemo && packageTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
-            <select aria-label="Access point" id="session-node-filter" value={selectedNode} onChange={(event) => setSelectedNode(event.target.value)}>
+            <select disabled={!showDemo} aria-label="Access point" id="session-node-filter" value={selectedNode} onChange={(event) => setSelectedNode(event.target.value)}>
               <option value="All">All Nodes</option>
-              {[...new Set(initialSessions.map((session) => session.node))].map((node) => (
+              {showDemo && [...new Set(initialSessions.map((session) => session.node))].map((node) => (
                 <option key={node}>{node}</option>
               ))}
             </select>
-            <span className="sessions-refresh-label">Fixed snapshot</span>
+            {live ? <button type="button" className="session-secondary-button" disabled={liveList.loading} onClick={() => changeList(page)}>Refresh</button> : showDemo && <span className="sessions-refresh-label">Fixed snapshot</span>}
           </div>
         </div>
 
@@ -417,10 +500,10 @@ export default function SessionsPage() {
       <section className="sessions-list-panel" aria-label="Session records">
         <div className="sessions-list-heading">
           <div>
-            <h2>Active Authentications</h2>
-            <p>Review the illustrative session records below.</p>
+            <h2>{live ? 'Session records' : 'Active Authentications'}</h2>
+            {showDemo && <p>Review the illustrative session records below.</p>}
           </div>
-          <span className="sessions-record-count">{filteredSessions.length} demo records</span>
+          <span className="sessions-record-count">{filteredSessions.length} {showDemo ? 'demo records' : 'on this page'}</span>
         </div>
 
         <div className="sessions-table-scroll" role="region" aria-label="Active authentications" tabIndex={0}>
@@ -430,6 +513,7 @@ export default function SessionsPage() {
                 <th scope="col">Customer / Device</th>
                 <th scope="col">Package</th>
                 <th scope="col">Connection status</th>
+                {live && <th scope="col">Activation status</th>}
                 <th scope="col">Start time</th>
                 <th scope="col">Expiry time</th>
                 <th scope="col">Remaining</th>
@@ -438,15 +522,15 @@ export default function SessionsPage() {
             </thead>
             <tbody>
               {filteredSessions.map((session) => (
-                <tr className="session-table-row" key={session.id}>
+                <tr className="session-table-row" key={session.id} style={live && details?.session.id === session.id ? { backgroundColor: '#f0edf6' } : undefined}>
                   <th scope="row">
                     <div className="session-card-identity">
                       <span className="session-avatar" aria-hidden="true">{initials(session.name)}</span>
                       <div>
                         <strong>{session.name}</strong>
-                        <span>{session.phone}</span>
-                        <span className="session-mono">{session.ip} / {session.mac}</span>
-                        <span>{session.node}</span>
+                        <span>{live ? `Session #${session.id} · Payment #${session.paymentId}` : session.phone}</span>
+                        {showDemo && <span className="session-mono">{session.ip} / {session.mac}</span>}
+                        {showDemo && <span>{session.node}</span>}
                       </div>
                     </div>
                   </th>
@@ -457,6 +541,7 @@ export default function SessionsPage() {
                   <td>
                     <span className="session-connection-badge" data-status={session.status}>{session.status}</span>
                   </td>
+                  {live && <td>{session.activationStatus}</td>}
                   <td>{session.started}</td>
                   <td>{session.expiry}</td>
                   <td>{session.remaining}</td>
@@ -474,11 +559,13 @@ export default function SessionsPage() {
               ))}
               {filteredSessions.length === 0 && (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={live ? 8 : 7}>
                     <div className="sessions-empty">
                       <span className="material-symbols-outlined" aria-hidden="true">search_off</span>
-                      <strong>No matching demo sessions</strong>
-                      <span>Try another search term or clear the selected filters.</span>
+                      <strong role={liveList.error ? 'alert' : 'status'}>
+                        {live ? liveList.error || (liveList.loading ? 'Loading sessions…' : 'No matching sessions') : showDemo ? 'No matching demo sessions' : 'Session records unavailable'}
+                      </strong>
+                      {!live || (!liveList.loading && !liveList.error) ? <span>Try another search term or clear the selected filters.</span> : null}
                     </div>
                   </td>
                 </tr>
@@ -488,20 +575,30 @@ export default function SessionsPage() {
         </div>
 
         <div className="sessions-list-footer">
-          <span>Showing {filteredSessions.length} of {initialSessions.length} demo records</span>
-          <span>Page 1 of 1</span>
+          {live ? (
+            <>
+              <span>Page {page + 1}</span>
+              <div aria-label="Session pages" role="group">
+                <button type="button" className="session-secondary-button" disabled={page === 0 || liveList.loading} onClick={() => changeList(page - 1)}>Previous</button>
+                <button type="button" className="session-secondary-button" disabled={!liveList.hasNext || liveList.loading} onClick={() => changeList(page + 1)}>Next</button>
+              </div>
+            </>
+          ) : showDemo && <><span>Showing {filteredSessions.length} of {initialSessions.length} demo records</span><span>Page 1 of 1</span></>}
         </div>
       </section>
 
       {notice && <p className="sessions-notice" role="status">{notice}</p>}
 
-      <p className="sessions-disclaimer">
+      {showDemo && <p className="sessions-disclaimer">
         Illustrative interface and sample records only. No live subscriber leases, bandwidth telemetry, RADIUS accounting, or Change of Authorization (CoA) operations are being queried or performed.
-      </p>
+      </p>}
 
       {details && (
         <SessionDetails
+          key={details.session.id}
           session={details.session}
+          accessToken={accessToken}
+          onSignOut={onSignOut}
           opener={details.opener}
           onClose={() => setDetails(null)}
         />
