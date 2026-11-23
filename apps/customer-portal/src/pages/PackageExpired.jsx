@@ -1,14 +1,4 @@
-import {
-  ArrowRight,
-  CalendarDays,
-  CircleHelp,
-  Clock3,
-  Hourglass,
-  Radio,
-  RefreshCw,
-  UserRound,
-  Wifi,
-} from 'lucide-react'
+import { ArrowRight, CalendarDays, CircleHelp, Clock3, Hourglass, Radio, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 const samplePackage = {
@@ -19,203 +9,148 @@ const samplePackage = {
 }
 
 const sampleUsage = {
-  dataUsed: '2.0 GB',
-  totalData: '2.0 GB',
+  used: '2.0 GB',
+  allowance: '2.0 GB',
   percent: 100,
-  expiry: '2:15 PM EAT',
+  expiredAt: '2:15 PM EAT',
 }
+
+const focusRing =
+  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#585172]'
 
 export default function PackageExpired() {
   return (
-    <div className="min-h-screen bg-[#F7F6F2] flex flex-col">
-      <header className="bg-white border-b border-[#F0EEF6]">
-        <div className="max-w-7xl mx-auto px-5 md:px-8 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#77709D] flex items-center justify-center text-white">
-              <Radio size={22} />
-            </div>
+    <div className="flex min-h-screen flex-col bg-[#f8f7f4] text-[#17152d]">
+      <header className="border-b border-[#e8e6e0]">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-8">
+          <Link to="/" className={`flex items-center gap-2 rounded-lg ${focusRing}`}>
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#585172] text-white">
+              <Radio aria-hidden="true" size={19} />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold">Weza Wi-Fi</span>
+              <span className="block text-xs text-[#57545f]">Customer Portal</span>
+            </span>
+          </Link>
 
-            <div>
-              <h2 className="font-bold text-sm text-[#17152D]">
-                Weza Wi-Fi
-              </h2>
-              <p className="text-[10px] tracking-wide text-[#88849A]">
-                CUSTOMER PORTAL
-              </p>
-            </div>
-
-            <div className="hidden sm:flex items-center gap-2 ml-4 bg-[#F7F6F2] rounded-full px-3 py-2">
-              <span className="w-2 h-2 rounded-full bg-[#88849A]" />
-              <Wifi size={13} className="text-[#77709D]" />
-              <span className="text-xs text-[#17152D]">
-                Portal preview
-              </span>
-            </div>
-          </div>
-
-          <nav className="flex items-center gap-3 md:gap-5">
-            <Link
-              to="/"
-              className="text-xs text-[#655F75] hover:text-[#77709D]"
-            >
+          <nav
+            aria-label="Customer navigation"
+            className="flex flex-wrap items-center gap-1 sm:gap-3"
+          >
+            <Link to="/" className={`rounded-full px-3 py-3 text-sm hover:bg-[#eeede9] ${focusRing}`}>
               Home
             </Link>
-
             <Link
               to="/support"
-              className="text-xs text-[#77709D] border border-dashed border-[#77709D] rounded-full px-4 py-2"
+              className={`rounded-full px-3 py-3 text-sm hover:bg-[#eeede9] ${focusRing}`}
             >
               Support
             </Link>
-
             <Link
               to="/profile"
-              aria-label="Profile"
-              className="w-8 h-8 rounded-full bg-[#77709D] text-white flex items-center justify-center"
+              aria-label="My Profile"
+              className={`grid h-11 w-11 place-items-center rounded-full bg-[#585172] text-white ${focusRing}`}
             >
-              <UserRound size={16} />
+              <UserRound aria-hidden="true" size={18} />
             </Link>
           </nav>
         </div>
       </header>
 
-      <main className="flex-1 flex justify-center px-4 py-10 md:py-14">
+      <main className="grid flex-1 place-items-center px-4 py-10 sm:py-14">
         <div className="w-full max-w-md">
-          <div className="flex justify-center mb-7">
-            <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 shadow-sm">
-              <span className="w-2 h-2 rounded-full bg-[#88849A]" />
-              <Wifi size={13} className="text-[#77709D]" />
-
-              <span className="text-[10px] text-[#17152D]">
-                Network status unverified
-              </span>
+          <div className="text-center">
+            <p className="inline-flex rounded-full bg-white px-4 py-2 text-xs font-semibold text-[#585172]">
+              Development preview · Sample subscription
+            </p>
+            <div className="mx-auto mt-4 grid h-14 w-14 place-items-center rounded-full border border-red-200 bg-red-50 text-red-700">
+              <Hourglass aria-hidden="true" size={24} />
             </div>
-          </div>
-
-          <div className="flex justify-center mb-5">
-            <div className="relative">
-              <div className="w-16 h-16 rounded-full border-2 border-red-400 bg-red-50 flex items-center justify-center text-red-500 shadow-sm">
-                <Hourglass size={27} />
-              </div>
-
-              <div className="absolute -bottom-1 -right-2 w-6 h-6 rounded-full bg-white shadow flex items-center justify-center">
-                <RefreshCw size={12} className="text-[#77709D]" />
-              </div>
-            </div>
-          </div>
-
-          <div className="text-center mb-7">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-[#17152D]">
-              Your package has
-              <br />
-              expired
-            </h1>
-
-            <p className="text-xs text-[#77709D] mt-3">
-              Preview renewal or browse other packages.
+            <h1 className="mt-4 text-2xl font-bold sm:text-3xl">Your package has expired</h1>
+            <p className="mt-2 text-sm leading-relaxed text-[#57545f]">
+              Renew your previous package or choose another one to reconnect.
             </p>
           </div>
 
-          <section className="bg-white rounded-xl p-4 shadow-sm border border-[#F0EEF6]">
-            <p className="mb-3 text-xs font-semibold text-[#655F75]">
-              Demo subscription details
-            </p>
-
-            <div className="flex justify-between items-start mb-4">
+          <section
+            aria-labelledby="previous-plan"
+            className="mt-6 rounded-xl border border-[#ebe9e5] bg-white p-5 shadow-sm"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <div className="flex items-center gap-1 text-[10px] text-[#88849A] uppercase tracking-wide mb-1">
-                  Previous plan
-                  <CircleHelp size={11} />
-                </div>
-
-                <h2 className="font-bold text-sm text-[#17152D]">
+                <p className="text-xs font-semibold text-[#585172]">Previous plan</p>
+                <h2 id="previous-plan" className="mt-1 text-base font-semibold">
                   {samplePackage.name} ({samplePackage.data})
                 </h2>
               </div>
-
-              <span className="bg-red-100 text-red-600 text-[10px] font-semibold rounded-full px-3 py-1">
-                • Expired
+              <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-800">
+                Expired
               </span>
             </div>
 
-            <div className="bg-[#F7F6F2] rounded-lg p-3">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-[10px] text-[#77709D]">
-                  <span className="inline-block w-2 h-2 rounded-full border border-[#77709D] mr-1" />
-                  Data used
+            <div className="mt-4 rounded-lg bg-[#f2f1ee] p-3">
+              <p className="flex flex-wrap justify-between gap-2 text-sm">
+                <span id="usage-label">Data used</span>
+                <span id="usage-value" className="font-medium">
+                  {sampleUsage.used} of {sampleUsage.allowance} ({sampleUsage.percent}%)
                 </span>
-
-                <span className="text-[10px] font-semibold text-[#17152D]">
-                  {sampleUsage.dataUsed} of {sampleUsage.totalData} ({sampleUsage.percent}%)
-                </span>
-              </div>
-
-              <div className="w-full h-1.5 rounded-full bg-[#E5E2ED] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-[#77709D]"
-                  style={{ width: `${sampleUsage.percent}%` }}
-                />
-              </div>
+              </p>
+              <meter
+                aria-labelledby="usage-label"
+                aria-describedby="usage-value"
+                className="mt-2 block h-2 w-full accent-[#585172]"
+                min={0}
+                max={100}
+                value={sampleUsage.percent}
+              />
             </div>
 
-            <div className="flex justify-between items-center mt-4 text-[10px] text-[#77709D]">
-              <div className="flex items-center gap-1">
-                <Clock3 size={12} />
-                Sample expiry at {sampleUsage.expiry}
-              </div>
-
-              <div className="flex items-center gap-1">
-                <CalendarDays size={12} />
-                Valid for {samplePackage.duration}
-              </div>
-            </div>
+            <ul className="mt-4 flex flex-wrap justify-between gap-2 text-sm text-[#57545f]">
+              <li className="flex items-center gap-2">
+                <Clock3 aria-hidden="true" size={15} /> Expired at {sampleUsage.expiredAt}
+              </li>
+              <li className="flex items-center gap-2">
+                <CalendarDays aria-hidden="true" size={15} /> Valid for {samplePackage.duration}
+              </li>
+            </ul>
           </section>
 
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 space-y-2">
             <Link
               to="/confirm-package"
               state={{ selectedPackage: samplePackage }}
-              className="w-full flex items-center justify-center gap-2 rounded-full bg-[#D9E52E] hover:bg-[#cbd622] text-[#17152D] text-xs font-semibold py-3.5 transition-colors"
+              className={`inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#d5ec26] px-5 py-3 text-sm font-semibold text-[#202300] hover:bg-[#c4db1c] ${focusRing}`}
             >
               Renew Package (KES {samplePackage.price})
-              <ArrowRight size={15} aria-hidden="true" />
+              <ArrowRight aria-hidden="true" size={17} />
             </Link>
-
             <Link
               to="/packages"
-              className="w-full flex items-center justify-center gap-2 rounded-full border border-dashed border-[#77709D] bg-white hover:bg-[#F0EEF6] text-[#17152D] text-xs font-semibold py-3.5 transition-colors"
+              className={`inline-flex min-h-11 w-full items-center justify-center rounded-full bg-[#eeede9] px-5 py-3 text-sm font-semibold hover:bg-[#e3e1dc] ${focusRing}`}
             >
               Browse Packages
             </Link>
           </div>
 
-          <div className="flex justify-center mt-8">
+          <div className="mt-3 text-center">
             <Link
               to="/support"
-              className="flex items-center gap-1.5 text-xs text-[#77709D] hover:underline"
+              className={`inline-flex min-h-11 items-center gap-2 rounded px-2 text-sm text-[#47415e] underline underline-offset-4 ${focusRing}`}
             >
-              <CircleHelp size={13} />
-              Need help? Get Support
+              <CircleHelp aria-hidden="true" size={16} /> Get support
             </Link>
           </div>
         </div>
       </main>
 
-      <footer className="bg-white border-t border-[#F0EEF6]">
-        <div className="max-w-7xl mx-auto px-5 md:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-[10px] text-[#77709D]">
-            <div className="w-5 h-5 rounded-md bg-[#77709D] text-white flex items-center justify-center">
-              <Radio size={12} />
-            </div>
-
-            © Weza Wi-Fi. Empowering Community Connectivity.
-          </div>
-
+      <footer className="border-t border-[#e8e6e0] bg-[#f2f1ee]">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-x-4 px-4 py-2 text-sm text-[#57545f] sm:px-8">
+          <span>Weza Wi-Fi</span>
           <Link
             to="/support"
-            className="text-[10px] text-[#77709D] hover:underline"
+            className={`inline-flex min-h-11 items-center rounded text-[#47415e] underline underline-offset-4 ${focusRing}`}
           >
-            M-Pesa Help & FAQs
+            M-Pesa help and FAQs
           </Link>
         </div>
       </footer>
