@@ -21,3 +21,5 @@ class Purchase(TimestampMixin, Base):
     upload_speed_mbps = Column(Integer, nullable=False)
     status = Column(String(20), default="pending", nullable=False)
     idempotency_key = Column(String(100), unique=True, nullable=False)
+    device_mac_address = Column(String(17))
+    device_ip_address = Column(String(45))

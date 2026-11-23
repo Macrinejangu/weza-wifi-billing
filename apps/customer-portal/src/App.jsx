@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { demoDataEnabled } from '../../shared/demoMode.js'
+import PaymentStatus from './components/payments/PaymentStatus'
+import ConnectionStatus from './pages/ConnectionStatus'
 import CustomerLayout from './components/layout/CustomerLayout'
 
 import ConfirmPackage from './pages/ConfirmPackage'
@@ -43,6 +45,19 @@ export default function App() {
         }
       />
       <Route path="/hotspot-entry" element={<HotspotEntry />} />
+
+      <Route
+        path="/payment-status"
+        element={demoDataEnabled ? <PaymentStatus /> : (
+          <UnavailablePage title="Payment status" message="Live payment status is currently unavailable." />
+        )}
+      />
+      <Route
+        path="/connection-status"
+        element={demoDataEnabled ? <ConnectionStatus /> : (
+          <UnavailablePage title="Connection status" message="Live connection status is currently unavailable." />
+        )}
+      />
 
       <Route element={<CustomerLayout />}>
         <Route
