@@ -21,7 +21,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", FRONTENDS).split(","),
     allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
 )
 
 app.include_router(health_router)

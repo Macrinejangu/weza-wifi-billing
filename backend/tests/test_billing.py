@@ -24,6 +24,59 @@ def paid_payment(db, user, package, ok=True):
     return process_mock_payment(db, create_payment(db, purchase.id, PHONE).id, ok)
 
 
+def test_checkout_binds_verified_device_to_session(db, user, package, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.api import billing
+    from app.db.session import get_db
+    from app.main import app
+    from app.models import Purchase
+
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
+    monkeypatch.setenv("ENABLE_DIRECT_HOTSPOT_CHECKOUT", "true")
+    monkeypatch.setenv("JWT_SECRET", "x" * 32)
+    monkeypatch.setitem(app.dependency_overrides, get_db, lambda: db)
+    mac = "8A:AA:52:95:B9:BB"
+    ip = "10.20.0.254"
+
+    def lookup(address):
+        assert address == ip
+        return mac
+
+    monkeypatch.setattr(billing, "resolve_hotspot_device", lookup)
+    checkout = {"user_id": user.id, "package_id": package.id}
+    headers = {"Idempotency-Key": "checkout-verified"}
+    with TestClient(app, client=(ip, 50000)) as hotspot:
+        reference_url = "/api/checkout/device-reference"
+        forwarded = hotspot.post(reference_url, json=checkout, headers={
+            **headers, "X-Forwarded-For": "10.20.0.253",
+        })
+        assert forwarded.status_code == 400
+        reference = hotspot.post(reference_url, json=checkout, headers=headers)
+        assert reference.status_code == 200
+        verified_checkout = {**checkout, **reference.json()}
+
+        for bad_checkout, bad_headers in (
+            ({**checkout, "device_reference": "unknown"}, headers),
+            (verified_checkout, {"Idempotency-Key": "another-checkout"}),
+        ):
+            rejected = hotspot.post("/api/purchases", json=bad_checkout, headers=bad_headers)
+            assert rejected.status_code == 400
+
+        purchased = hotspot.post("/api/purchases", json=verified_checkout, headers=headers)
+        assert purchased.status_code == 201
+        again = hotspot.post("/api/purchases", json=verified_checkout, headers=headers)
+        assert again.status_code == 200
+        assert again.json()["id"] == purchased.json()["id"]
+
+    purchase = db.get(Purchase, purchased.json()["id"])
+    assert (purchase.device_mac_address, purchase.device_ip_address) == (mac, ip)
+    payment = process_mock_payment(db, create_payment(db, purchase.id, PHONE).id)
+    with pytest.raises(ValueError, match="does not match the purchase"):
+        create_session(db, payment.id, "AA:BB:CC:DD:EE:FF", ip)
+    session = create_session(db, payment.id)
+    assert (session.device_mac_address, session.device_ip_address) == (mac, ip)
+
 def test_get_packages(client, package):
     assert client.get("/api/packages/").json()[0]["name"] == "1 Hour"
 
