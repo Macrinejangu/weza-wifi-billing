@@ -343,3 +343,48 @@ def test_the_daraja_client_is_built_once_and_reused(monkeypatch, fresh_client_ca
     assert isinstance(first, DarajaClient)
     assert first is second
     assert len(calls) == 1
+def test_customer_payment_status_returns_only_customer_fields(client, fake, db, purchase, monkeypatch):
+    payment_id = post(client, purchase.id).json()["payment_id"]
+    monkeypatch.setenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", "false")
+    url = f"/api/customer/payments/{payment_id}"
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json() == {
+        "id": payment_id,
+        "purchase_id": purchase.id,
+        "status": "pending",
+        "amount": purchase.amount,
+        "package_name": purchase.package_name,
+        "mpesa_receipt_number": None,
+    }
+
+    payment = db.get(Payment, payment_id)
+    payment.status = "successful"
+    payment.mpesa_receipt_number = "TESTRECEIPT"
+    db.flush()
+
+    assert client.get(url).json()["status"] == "successful"
+    assert client.get(url).json()["mpesa_receipt_number"] == "TESTRECEIPT"
+    assert len(fake.calls) == 1
+
+
+def test_customer_payment_status_rejects_anonymous_and_other_customers(client, fake, db, purchase):
+    payment_id = post(client, purchase.id).json()["payment_id"]
+    url = f"/api/customer/payments/{payment_id}"
+    del client.headers["Authorization"]
+    assert client.get(url).status_code == 401
+
+    other = User(email="other@example.test", full_name="Other Customer",
+                 role="customer", status="active", password_hash="x")
+    db.add(other)
+    db.flush()
+    token = create_token(other.id, audience=CUSTOMER_AUDIENCE)
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = client.get(url)
+    missing = client.get("/api/customer/payments/2147483647")
+    assert response.status_code == missing.status_code == 404
+    assert response.json() == missing.json()
+    assert len(fake.calls) == 1

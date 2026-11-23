@@ -255,7 +255,12 @@ export default function ConfirmPackage({ accessToken }) {
                   className={isAlert ? 'mt-3 text-sm text-red-700' : 'mt-3 text-sm text-[#585172]'}
                 >
                   {feedback.text}
-                  {feedback.paymentId && <> Payment reference: {feedback.paymentId}.</>}
+                  {Number.isSafeInteger(feedback.paymentId) && feedback.paymentId > 0 && (
+                    <> Payment reference: {feedback.paymentId}.{' '}
+                    <Link to={`/payment-status?payment=${feedback.paymentId}`} className="underline">
+                      Check payment status
+                    </Link></>
+                  )}
                   {feedback.kind === 'blocked' && (
                     <> <Link to="/support" className="underline">Get support</Link></>
                   )}

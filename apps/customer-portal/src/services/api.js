@@ -67,6 +67,14 @@ export function startMpesaPayment({ accessToken, purchaseId, phoneNumber }) {
   })
 }
 
+export function getCustomerPayment({ accessToken, paymentId, signal }) {
+  return apiRequest(`/api/customer/payments/${paymentId}`, {
+    cache: 'no-store',
+    signal,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+}
+
 export function getConnectionStatus() {
   return apiRequest('/api/network/status')
 }
