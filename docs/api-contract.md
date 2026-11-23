@@ -29,3 +29,77 @@ Package creation, editing, and deactivation also require a bearer token from `PO
 Session responses include `id`, `status`, `activation_status`, `failure_reason`, `started_at` and `expires_at`. See [session states](session-states.md) for transitions.
 
 Invalid input returns 422 with validation details. Missing records or inactive packages at purchase creation return 404 with a `detail` message. Reusing a purchase key for a different request, paying a non-pending purchase, or creating a session for an unconfirmed payment returns 400 with a `detail` message. A failed router simulation returns 502 and records the failed activation attempt.
+
+## POST /api/payments
+
+Asks Daraja (sandbox) to send an M-Pesa prompt to the customer's phone for one purchase. Implemented in WEZA-49.
+
+**Accepted by Daraja does not mean paid.** A 201 only means the prompt was sent. The payment stays `pending` until a verified callback or status query settles it (WEZA-50).
+
+### Request
+
+```json
+{"purchase_id": 12, "phone_number": "0712345678"}
+```
+
+| Field | Rules |
+| --- | --- |
+| `purchase_id` | Positive integer. The purchase must exist and be pending. |
+| `phone_number` | Safaricom mobile number. Stored and sent as `254XXXXXXXXX`. |
+
+There is no `amount` field. The amount always comes from the stored purchase, so a client cannot choose the price. Any extra field is ignored.
+
+### Success: 201
+
+```json
+{
+  "payment_id": 7,
+  "purchase_id": 12,
+  "amount": 20,
+  "status": "pending",
+  "message": "Check your phone and enter your M-Pesa PIN to complete the payment."
+}
+```
+
+`amount` is whole shillings. The response never contains the phone number.
+
+### Errors
+
+Every error from our code has this body. `payment_id` appears only when a payment row exists.
+
+```json
+{"detail": "Purchase not found.", "code": "purchase_not_found", "payment_id": 7}
+```
+
+| HTTP | `code` | Meaning | Payment row afterwards |
+| --- | --- | --- | --- |
+| 404 | `purchase_not_found` | No such purchase. | none |
+| 409 | `purchase_not_payable` | Purchase is not pending (paid, failed or expired). | none |
+| 409 | `payment_already_pending` | A payment is already pending for this purchase (double tap). Use the returned `payment_id`. | existing one, unchanged |
+| 502 | `provider_rejected` | Daraja refused the request. Daraja's own codes are never shown to clients. | `failed` |
+| 503 | `provider_not_reached` | No prompt was sent (for example, no access token). | `failed` |
+| 502 / 504 | `outcome_unknown` | Daraja answered oddly, was down, or timed out (504). A prompt may have been sent. | stays `pending` |
+| 503 | `payments_not_configured` | Daraja settings are missing on the server. | none |
+| 503 | `service_unavailable` | Database unavailable. | none |
+| 500 | `internal_error` | Our own bug. The text is generic by design. | see note |
+| 422 | (FastAPI validation body) | Malformed request. Raised before any payment code runs. | none |
+
+Note on `internal_error`: the payment, if one was created, is marked `failed`.
+
+The client must never create a second payment after `outcome_unknown`. The first attempt may still be answered by the customer, so it is resolved by the status query, not by a retry.
+
+### Payment states
+
+| Status | Meaning | Set by |
+| --- | --- | --- |
+| `pending` | Prompt sent or possibly sent, no verified result yet. | WEZA-49 |
+| `successful` | Verified payment. Only verified provider data sets this. | WEZA-50 |
+| `failed` | Proven not sent, refused, cancelled or failed. | WEZA-49, WEZA-50 |
+| `expired` | Pending too long with no answer. | WEZA-50 |
+
+Payment status is separate from activation status. `successful` never means the internet is active.
+
+### Known gaps
+
+- There is no customer login yet. Anyone who guesses a purchase id could trigger a prompt for it. An ownership check is needed once customer authentication exists.
+- Device verification before the prompt (WEZA-53) is not wired in yet.
