@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.routes.payments import get_daraja_client
 from app.config import callback_security_policy
@@ -38,7 +39,7 @@ from app.payments.event_payload import build_event_payload
 from app.services.callback_processing import process_callback
 from app.services.payment_event_service import EventSource, record_received_event
 
-from starlette.concurrency import run_in_threadpool
+
 
 logger = logging.getLogger(__name__)
 
@@ -134,9 +135,7 @@ async def receive_mpesa_callback(
     raw_body = await _read_limited_body(request)
     if raw_body is None:
         logger.warning("callback rejected: body too large or bad length header")
-        return _error(413, "payload_too_large", "Request body is too large.")
-
-    from starlette.concurrency import run_in_threadpool
+        return _error(413, "payload_too_large", "Request body is too large.")    
 
     return await run_in_threadpool(_handle_callback, db, daraja, raw_body)
 
