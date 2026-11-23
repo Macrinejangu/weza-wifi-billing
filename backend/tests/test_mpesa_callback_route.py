@@ -5,6 +5,7 @@ policy and a fake Daraja. No network, no real configuration.
 """
 
 import json
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,8 +23,9 @@ from app.main import app
 from app.models import Payment, PaymentEvent
 from app.payments.callback_ip_policy import CallbackIpPolicy
 from app.payments.callback_security import CallbackSecurityPolicy
+from app.services.callback_processing import replay_callback
 
-from test_callback_processing import PAID, FakeDaraja, body
+from test_callback_processing import PAID, UNKNOWN, FakeDaraja, body
 from test_payment_settlement import make_payment, make_purchase
 
 TOKEN = "Abc123_-" * 5  # 40 URL-safe characters
@@ -203,3 +205,64 @@ def test_lookup_error_is_not_turned_into_a_404_by_main(api, db, pending, monkeyp
 
     assert response.status_code == 500
     assert "payment 9" not in response.text
+
+
+def test_replay_recovers_callback_that_arrived_before_request_ids(api, db, pending, daraja):
+    purchase, payment = pending
+    checkout, merchant = payment.checkout_request_id, payment.merchant_request_id
+    payment.checkout_request_id = payment.merchant_request_id = None
+    db.commit()
+
+    assert post(api, json.dumps(body())).status_code == 200
+    original = events(db)[0]
+    assert original.processing_status == "unmatched"
+    original_id = original.id
+    assert daraja.calls == []
+
+    payment.checkout_request_id, payment.merchant_request_id = checkout, merchant
+    db.commit()
+    assert replay_callback(db, daraja, original_id).outcome == "applied"
+    assert replay_callback(db, daraja, original_id).outcome == "duplicate"
+
+    audit_rows = events(db)
+    assert [row.processing_status for row in audit_rows] == ["unmatched", "applied", "duplicate"]
+    assert [row.payload["replay_of_event_id"] for row in audit_rows[1:]] == [original_id, original_id]
+    assert daraja.calls == [checkout]
+    assert payment.status == "successful"
+    assert purchase.status == "paid"
+
+
+def test_replay_recovers_inconclusive_query(api, db, pending, daraja):
+    _, payment = pending
+    daraja.result = UNKNOWN
+    assert post(api, json.dumps(body())).status_code == 200
+    original = events(db)[0]
+    assert original.processing_status == "rejected"
+    assert payment.status == "pending"
+
+    daraja.result = PAID
+    assert replay_callback(db, daraja, original.id).outcome == "applied"
+    assert payment.status == "successful"
+
+
+def test_replay_rejects_callback_with_wrong_amount(api, db, pending, daraja):
+    _, payment = pending
+    assert post(api, json.dumps(body(amount=99999))).status_code == 200
+    event = events(db)[0]
+
+    with pytest.raises(ValueError, match="not eligible"):
+        replay_callback(db, daraja, event.id)
+
+    assert len(events(db)) == 1
+    assert daraja.calls == []
+    assert payment.status == "pending"
+
+
+def test_uvicorn_access_log_omits_callback_path_and_keeps_health(caplog):
+    logger = logging.getLogger("uvicorn.access")
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        logger.info('%s - "%s %s HTTP/%s" %d', "peer", "POST", URL, "1.1", 404)
+        logger.info('%s - "%s %s HTTP/%s" %d', "peer", "GET", "/health", "1.1", 200)
+
+    assert TOKEN not in caplog.text
+    assert "GET /health" in caplog.text

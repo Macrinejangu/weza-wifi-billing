@@ -45,6 +45,7 @@ _PAYABLE_PURCHASE_STATUSES = {"pending", "expired"}
 # payments.result_desc is Text, but we still cap what we store from a sender
 # we cannot authenticate. The full body is kept in raw_callback anyway.
 MAX_RESULT_DESC_CHARS = 500
+UNCONFIRMED_QUERY_NOTE = "not confirmed by status query; payment left unchanged"
 
 # How each action is recorded on the audit event.
 _EVENT_OUTCOME = {
@@ -141,7 +142,7 @@ def _settle_under_lock(
     elif action is SettlementAction.ALREADY_SETTLED:
         note = f"repeat callback; payment already {payment.status}"
     elif action is SettlementAction.KEEP_PENDING:
-        note = "not confirmed by status query; payment left unchanged"
+        note = UNCONFIRMED_QUERY_NOTE
     else:
         note = f"callback not applied: {verdict.value}"
 

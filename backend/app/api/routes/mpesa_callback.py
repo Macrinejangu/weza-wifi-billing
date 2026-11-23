@@ -14,8 +14,8 @@ Rules this route follows:
 * Safaricom gets a 200 for anything we stored, even if we rejected it: it
   cannot act on our reasons, and a failure code would only trigger retries.
   A 5xx means "we could not record or process this".
-* The token is never logged. uvicorn's access log does print request paths,
-  so the token can appear there. Known limitation, see docs.
+* Callback paths are excluded from Uvicorn access logs. Proxy and tunnel
+  access logging must be configured separately.
 * ValueError and LookupError are caught HERE: main.py would otherwise turn
   them into 400/404 responses carrying our internal wording.
 """
@@ -40,10 +40,19 @@ from app.services.callback_processing import process_callback
 from app.services.payment_event_service import EventSource, record_received_event
 
 
-
 logger = logging.getLogger(__name__)
+CALLBACK_PREFIX = "/api/payments/mpesa"
 
-router = APIRouter(prefix="/api/payments/mpesa", tags=["M-Pesa callback"])
+
+class CallbackAccessLogFilter(logging.Filter):
+    """Suppress Uvicorn access entries containing the callback secret path."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return f"{CALLBACK_PREFIX}/callback/" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(CallbackAccessLogFilter())
+router = APIRouter(prefix=CALLBACK_PREFIX, tags=["M-Pesa callback"])
 
 # A real STK callback is under 2 KB. 64 KB leaves room for growth and still
 # stops anyone from making us read or store a huge body.
@@ -135,7 +144,7 @@ async def receive_mpesa_callback(
     raw_body = await _read_limited_body(request)
     if raw_body is None:
         logger.warning("callback rejected: body too large or bad length header")
-        return _error(413, "payload_too_large", "Request body is too large.")    
+        return _error(413, "payload_too_large", "Request body is too large.")
 
     return await run_in_threadpool(_handle_callback, db, daraja, raw_body)
 
