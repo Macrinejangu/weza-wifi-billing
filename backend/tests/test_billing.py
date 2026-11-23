@@ -14,14 +14,8 @@ PHONE = "254712345678"
 def staff_headers(db, monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "x" * 40)
     staff = User(full_name="Staff", email="session-staff@weza.local", password_hash="x", role="operator")
-    db.add(staff); db.commit()
-    return {"Authorization": f"Bearer {create_token(staff.id)}"}
-
-
-def staff_headers(db, monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "x" * 40)
-    staff = User(full_name="Staff", email="session-staff@weza.local", password_hash="x", role="operator")
-    db.add(staff); db.commit()
+    db.add(staff)
+    db.commit()
     return {"Authorization": f"Bearer {create_token(staff.id)}"}
 
 
