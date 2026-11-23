@@ -15,16 +15,16 @@ Set a unique random `JWT_SECRET` in the root `.env` and run `python -m app.creat
 
 Package creation, editing, and deactivation also require a bearer token from `POST /api/auth/login`. Send the token in the `Authorization` header. An active customer receives HTTP 403. Missing, invalid, or expired tokens and suspended staff receive HTTP 401. Public package viewing stays available.
 
-| Request                                    | Required input                                                                                                                               | Success response                                                                                                                                               |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/packages/`                      | `name`, `service_type`, positive integer `price`, `duration_minutes`, `download_speed_mbps` and `upload_speed_mbps`. Optional `description`. | 200 and the created package.                                                                                                                                   |
-| `PUT /api/packages/{package_id}`           | Same fields as creation, plus boolean `is_active`.                                                                                           | 200 and the updated package.                                                                                                                                   |
-| `DELETE /api/packages/{package_id}`        | Package ID in the path.                                                                                                                      | 200 and `{"message":"Package deactivated"}`.                                                                                                                   |
-| `POST /api/purchases`                      | Integer `user_id` and `package_id`. The `Idempotency-Key` header takes 8 to 100 characters.                                                  | 201 with `id`, `amount`, `package_name`, `duration_minutes` and `status`. Repeating the same request with the same key returns the existing purchase with 200. |
-| `POST /api/payments/mock`                  | Integer `purchase_id` and `phone_number` as `254` followed by nine digits. Optional boolean `successful` defaults to true.                   | 200 with `id`, `status` and nullable `mpesa_receipt_number`.                                                                                                   |
-| `POST /api/sessions`                       | Integer `payment_id`. Optional `device_mac_address` and `device_ip_address`.                                                                 | 201 with a session for the confirmed payment.                                                                                                                  |
-| `POST /api/sessions/{session_id}/activate` | Session ID in the path and a staff bearer token.                                                                                             | 200 when active, with timer timestamps. 202 while router confirmation is pending, with `activation_status` set to `waiting`.                                   |
-| `GET /api/sessions/{session_id}`           | Session ID in the path and a staff bearer token.                                                                                             | 200 with the session details.                                                                                                                                  |
+| Request | Required input | Success response |
+| --- | --- | --- |
+| `POST /api/packages/` | `name`, `service_type`, positive integer `price`, `duration_minutes`, `download_speed_mbps` and `upload_speed_mbps`. Optional `description`. | 200 and the created package. |
+| `PUT /api/packages/{package_id}` | Same fields as creation, plus boolean `is_active`. | 200 and the updated package. |
+| `DELETE /api/packages/{package_id}` | Package ID in the path. | 200 and `{"message":"Package deactivated"}`. |
+| `POST /api/purchases` | Integer `user_id` and `package_id`. The `Idempotency-Key` header takes 8 to 100 characters. | 201 with `id`, `amount`, `package_name`, `duration_minutes` and `status`. Repeating the same request with the same key returns the existing purchase with 200. |
+| `POST /api/payments/mock` | Integer `purchase_id` and `phone_number` as `254` followed by nine digits. Optional boolean `successful` defaults to true. | 200 with `id`, `status` and nullable `mpesa_receipt_number`. |
+| `POST /api/sessions` | Integer `payment_id`. Optional `device_mac_address` and `device_ip_address`. | 201 with a session for the confirmed payment. |
+| `POST /api/sessions/{session_id}/activate` | Session ID in the path and a staff bearer token. | 200 when active, with timer timestamps. 202 while router confirmation is pending, with `activation_status` set to `waiting`. |
+| `GET /api/sessions/{session_id}` | Session ID in the path and a staff bearer token. | 200 with the session details. |
 
 For session activation and detail, send the token from `POST /api/auth/login` in the `Authorization: Bearer <token>` header. Missing, invalid, or expired tokens and suspended staff accounts receive 401. Active customers receive 403. Authorized staff receive 404 for a missing session.
 
@@ -43,12 +43,12 @@ The route returns 404 by default. Set `ENABLE_DARAJA_SANDBOX_PAYMENTS=true` only
 ### Request
 
 ```json
-{ "purchase_id": 12, "phone_number": "0712345678" }
+{"purchase_id": 12, "phone_number": "0712345678"}
 ```
 
-| Field          | Rules                                                       |
-| -------------- | ----------------------------------------------------------- |
-| `purchase_id`  | Positive integer. The purchase must exist and be pending.   |
+| Field | Rules |
+| --- | --- |
+| `purchase_id` | Positive integer. The purchase must exist and be pending. |
 | `phone_number` | Safaricom mobile number. Stored and sent as `254XXXXXXXXX`. |
 
 There is no `amount` field. The amount always comes from the stored purchase, so a client cannot choose the price. Any extra field is ignored.
@@ -57,11 +57,11 @@ There is no `amount` field. The amount always comes from the stored purchase, so
 
 ```json
 {
-   "payment_id": 7,
-   "purchase_id": 12,
-   "amount": 20,
-   "status": "pending",
-   "message": "Check your phone and enter your M-Pesa PIN to complete the payment."
+  "payment_id": 7,
+  "purchase_id": 12,
+  "amount": 20,
+  "status": "pending",
+  "message": "Check your phone and enter your M-Pesa PIN to complete the payment."
 }
 ```
 
@@ -72,25 +72,21 @@ There is no `amount` field. The amount always comes from the stored purchase, so
 Every error from this endpoint has this body, which differs from the plain `{"detail": ...}` errors of the earlier endpoints above. `payment_id` appears only when a payment row exists.
 
 ```json
-{
-   "detail": "Purchase not found.",
-   "code": "purchase_not_found",
-   "payment_id": 7
-}
+{"detail": "Purchase not found.", "code": "purchase_not_found", "payment_id": 7}
 ```
 
-| HTTP      | `code`                    | Meaning                                                                                     | Payment row afterwards  |
-| --------- | ------------------------- | ------------------------------------------------------------------------------------------- | ----------------------- |
-| 404       | `purchase_not_found`      | No such purchase.                                                                           | none                    |
-| 409       | `purchase_not_payable`    | Purchase is not pending (paid, failed or expired).                                          | none                    |
-| 409       | `payment_already_pending` | A payment is already pending for this purchase (double tap). Use the returned `payment_id`. | existing one, unchanged |
-| 502       | `provider_rejected`       | Daraja refused the request. Daraja's own codes are never shown to clients.                  | `failed`                |
-| 503       | `provider_not_reached`    | No prompt was sent (for example, no access token).                                          | `failed`                |
-| 502 / 504 | `outcome_unknown`         | Daraja answered oddly, was down, or timed out (504). A prompt may have been sent.           | stays `pending`         |
-| 503       | `payments_not_configured` | Daraja settings are missing on the server.                                                  | none                    |
-| 503       | `service_unavailable`     | Database unavailable.                                                                       | none                    |
-| 500       | `internal_error`          | Our own bug. The text is generic by design.                                                 | see note                |
-| 422       | (FastAPI validation body) | Malformed request. Raised before any payment code runs.                                     | none                    |
+| HTTP | `code` | Meaning | Payment row afterwards |
+| --- | --- | --- | --- |
+| 404 | `purchase_not_found` | No such purchase. | none |
+| 409 | `purchase_not_payable` | Purchase is not pending (paid, failed or expired). | none |
+| 409 | `payment_already_pending` | A payment is already pending for this purchase (double tap). Use the returned `payment_id`. | existing one, unchanged |
+| 502 | `provider_rejected` | Daraja refused the request. Daraja's own codes are never shown to clients. | `failed` |
+| 503 | `provider_not_reached` | No prompt was sent (for example, no access token). | `failed` |
+| 502 / 504 | `outcome_unknown` | Daraja answered oddly, was down, or timed out (504). A prompt may have been sent. | stays `pending` |
+| 503 | `payments_not_configured` | Daraja settings are missing on the server. | none |
+| 503 | `service_unavailable` | Database unavailable. | none |
+| 500 | `internal_error` | Our own bug. The text is generic by design. | see note |
+| 422 | (FastAPI validation body) | Malformed request. Raised before any payment code runs. | none |
 
 Note on `internal_error`: the payment, if one was created, is marked `failed`.
 
@@ -98,12 +94,12 @@ The client must never create a second payment after `outcome_unknown`. The first
 
 ### Payment states
 
-| Status       | Meaning                                                  | Set by           |
-| ------------ | -------------------------------------------------------- | ---------------- |
-| `pending`    | Prompt sent or possibly sent, no verified result yet.    | WEZA-49          |
-| `successful` | Verified payment. Only verified provider data sets this. | WEZA-50          |
-| `failed`     | Proven not sent, refused, cancelled or failed.           | WEZA-49, WEZA-50 |
-| `expired`    | Pending too long with no answer.                         | WEZA-50          |
+| Status | Meaning | Set by |
+| --- | --- | --- |
+| `pending` | Prompt sent or possibly sent, no verified result yet. | WEZA-49 |
+| `successful` | Verified payment. Only verified provider data sets this. | WEZA-50 |
+| `failed` | Proven not sent, refused, cancelled or failed. | WEZA-49, WEZA-50 |
+| `expired` | Pending too long with no answer. | WEZA-50 |
 
 Payment status is separate from activation status. `successful` never means the internet is active.
 
@@ -111,41 +107,3 @@ Payment status is separate from activation status. `successful` never means the 
 
 - There is no customer login yet. Anyone who guesses a purchase id could trigger a prompt for it. An ownership check is needed once customer authentication exists.
 - Device verification before the prompt (WEZA-53) is not wired in yet.
-
-## POST /api/payments/mpesa/callback/{token}
-
-Receives Daraja's STK Push result. Implemented in WEZA-50. Called by Safaricom, never by our frontends, and hidden from `/docs`.
-
-### Protection
-
-Callbacks are not signed, so the endpoint relies on these checks, in this order:
-
-1. Optional source-IP allowlist (`CALLBACK_IP_CHECK_ENABLED`, off by default).
-2. A secret token in the URL path (`DARAJA_CALLBACK_TOKEN`). `DARAJA_CALLBACK_URL` must end with the same token.
-3. A body size limit of 64 KB.
-4. The callback must match a payment we created: both request IDs, the amount and the phone number.
-5. Success and failure are both confirmed with the STK status query before the payment changes. Unknown or failed queries leave the payment `pending`.
-
-A wrong IP, a wrong token and an unconfigured endpoint all get the same empty 404.
-
-### Responses
-
-| HTTP | Meaning                                                                                                                                                                       |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 200  | The message was stored and handled. Also returned for messages we rejected, because Safaricom cannot act on our reasons. Body: `{"ResultCode": 0, "ResultDesc": "Accepted"}`. |
-| 404  | IP, token or configuration check failed. Empty body.                                                                                                                          |
-| 413  | Body over 64 KB or a bad `Content-Length`. Nothing is stored.                                                                                                                 |
-| 503  | The message could not be recorded (database down).                                                                                                                            |
-| 500  | Our own bug. Generic body, and the audit event stays `received`.                                                                                                              |
-
-### Audit trail
-
-Every accepted message is saved in `payment_events` before processing and ends as `applied`, `duplicate`, `rejected` or `unmatched`. A duplicate delivery changes nothing.
-
-### Unverified (not confirmed from official Daraja pages)
-
-- The official STK Push page we checked does not state what reply the endpoint must return. We return 200 with the JSON above.
-- Only result codes 0 and 1032 are official. Other codes map to `unknown`.
-- The 12 callback IPs have not been tested against the sandbox, so the IP check stays off by default.
-- Whether the sandbox sends callbacks to a tunnel URL has not been tested.
-- uvicorn's access log can print the request path, which contains the token. Filter that log or rotate the token if logs leak.
