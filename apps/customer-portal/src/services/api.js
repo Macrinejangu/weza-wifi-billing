@@ -24,17 +24,35 @@ async function apiRequest(endpoint, options = {}) {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers
-    }
+      ...options.headers,
+    },
   })
 
   const data = await response.json().catch(() => ({}))
 
   if (!response.ok) {
-    throw new Error(data.detail || 'Unable to connect to WEZA server')
+    const message = typeof data?.detail === 'string'
+      ? data.detail
+      : 'Unable to complete the request'
+
+    const error = new Error(message)
+    error.status = response.status
+    error.code = data?.code
+    error.paymentId = data?.payment_id
+    throw error
   }
 
   return data
+}
+
+export function startMpesaPayment({ purchaseId, phoneNumber }) {
+  return apiRequest('/api/payments', {
+    method: 'POST',
+    body: JSON.stringify({
+      purchase_id: purchaseId,
+      phone_number: phoneNumber,
+    }),
+  })
 }
 
 export function getConnectionStatus() {

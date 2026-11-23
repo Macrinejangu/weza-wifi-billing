@@ -4,6 +4,12 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { fetchActivePackages } from '../services/api.js'
 
+const sandboxCheckoutEnabled =
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
+
+const sandboxPackageId = Number(import.meta.env.VITE_SANDBOX_PACKAGE_ID)
+const sandboxPurchaseId = Number(import.meta.env.VITE_SANDBOX_PURCHASE_ID)
+
 const demoPackages = demoDataEnabled ? [
   {
     name: 'Quick Connect',
@@ -112,6 +118,12 @@ export default function Packages() {
     ? packages.find((item) => String(item.id) === packageId)
     : undefined
 
+  const showSandboxCheckout =
+    sandboxCheckoutEnabled &&
+    selectedPackage?.id === sandboxPackageId &&
+    Number.isSafeInteger(sandboxPurchaseId) &&
+    sandboxPurchaseId > 0
+
   return (
     <div className="page-content">
       {isReviewing && (
@@ -138,9 +150,20 @@ export default function Packages() {
         selectedPackage ? (
           <div className="max-w-lg">
             <PackageCard item={selectedPackage} />
-            <p className="mt-5 text-sm text-[#655f75]">
-              Live checkout is currently unavailable.
-            </p>
+            {showSandboxCheckout ? (
+              <Link
+                to="/confirm-package"
+                state={{ selectedPackage }}
+                className="package-button mt-5 text-center"
+              >
+                Continue to M-Pesa checkout
+                <ArrowRight size={17} aria-hidden="true" />
+              </Link>
+            ) : (
+              <p className="mt-5 text-sm text-[#655f75]">
+                Live checkout is currently unavailable.
+              </p>
+            )}
           </div>
         ) : (
           <p role="status">This package is no longer available. Choose another package.</p>
@@ -161,7 +184,7 @@ export default function Packages() {
                     className="package-button text-center"
                   >
                     Choose {item.name}
-                    <ArrowRight size={17} className="shrink-0" aria-hidden="true" />
+                    <ArrowRight size={17} aria-hidden="true" />
                   </Link>
                 </PackageCard>
               ))}

@@ -17,6 +17,9 @@ import Usage from './pages/Usage'
 import Welcome from './pages/Welcome'
 import PackageExpired from './pages/PackageExpired'
 
+const sandboxCheckoutEnabled =
+  import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
+
 function UnavailablePage({ title, message }) {
   return (
     <section className="page-heading">
@@ -48,15 +51,25 @@ export default function App() {
 
       <Route
         path="/payment-status"
-        element={demoDataEnabled ? <PaymentStatus /> : (
-          <UnavailablePage title="Payment status" message="Live payment status is currently unavailable." />
-        )}
+        element={
+          demoDataEnabled ? <PaymentStatus /> : (
+            <UnavailablePage
+              title="Payment status"
+              message="Live payment status is currently unavailable."
+            />
+          )
+        }
       />
       <Route
         path="/connection-status"
-        element={demoDataEnabled ? <ConnectionStatus /> : (
-          <UnavailablePage title="Connection status" message="Live connection status is currently unavailable." />
-        )}
+        element={
+          demoDataEnabled ? <ConnectionStatus /> : (
+            <UnavailablePage
+              title="Connection status"
+              message="Live connection status is currently unavailable."
+            />
+          )
+        }
       />
 
       <Route element={<CustomerLayout />}>
@@ -75,7 +88,7 @@ export default function App() {
         <Route
           path="/confirm-package"
           element={
-            demoDataEnabled ? <ConfirmPackage /> : (
+            demoDataEnabled || sandboxCheckoutEnabled ? <ConfirmPackage /> : (
               <UnavailablePage
                 title="Checkout"
                 message="Live checkout is currently unavailable."
