@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.security import create_token, hash_password
 from app.api import staff as staff_api
-from app.models import User, WiFiSession
+from app.models import AccessPoint, Router, User, WiFiSession
 
 from test_payment_settlement import make_payment, make_purchase
 
@@ -275,3 +275,45 @@ def test_overview_counts_sandbox_receipts_and_current_session_states(client, db,
         "pending_payments": 1,
         "failed_activations": 1,
     }
+
+
+def test_network_inventory_is_staff_only(client, db):
+    customer = add_user(db, role="customer", email="inventory-customer@weza.local")
+    suspended = add_user(db, status="suspended", email="inventory-suspended@weza.local")
+
+    assert client.get("/api/network/devices").status_code == 401
+    assert client.get("/api/network/devices", headers={"Authorization": f"Bearer {create_token(customer.id)}"}).status_code == 403
+    assert client.get("/api/network/devices", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
+
+
+def test_staff_network_inventory_returns_saved_records_and_empty_lists(client, db):
+    staff = add_user(db)
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+    empty = client.get("/api/network/devices", headers=headers)
+    assert empty.status_code == 200
+    assert empty.json() == {"routers": [], "access_points": []}
+
+    router = Router(name="Audit Router", identity="audit-router", host="192.0.2.10", status="online")
+    db.add(router)
+    db.flush()
+    seen = datetime(2026, 11, 23, 8, tzinfo=UTC)
+    point = AccessPoint(
+        router_id=router.id, name="Audit Access Point", location="Test Lab",
+        mac_address="02:00:00:00:00:01", status="offline", last_seen_at=seen,
+    )
+    db.add(point)
+    db.commit()
+
+    response = client.get("/api/network/devices", headers=headers)
+    assert response.status_code == 200
+    inventory = response.json()
+    assert inventory["routers"] == [{
+        "id": router.id, "name": "Audit Router", "identity": "audit-router", "status": "online",
+    }]
+    [record] = inventory["access_points"]
+    assert record == {
+        "id": point.id, "name": "Audit Access Point", "router_id": router.id,
+        "location": "Test Lab", "mac_address": "02:00:00:00:00:01", "status": "offline",
+        "last_seen_at": record["last_seen_at"],
+    }
+    assert datetime.fromisoformat(record["last_seen_at"]) == seen

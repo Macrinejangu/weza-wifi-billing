@@ -131,3 +131,11 @@ export function getStaffOverview(accessToken, { signal } = {}) {
     errorMessage: 'Could not load overview totals. Please try again.',
   })
 }
+
+
+export function getStaffNetworkInventory(accessToken, { signal } = {}) {
+  return readStaffData('/api/network/devices', accessToken, {
+    signal,
+    errorMessage: 'Could not load device inventory. Please try again.',
+  })
+}
