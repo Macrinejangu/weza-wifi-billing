@@ -41,14 +41,20 @@ def _secret() -> str:
     return secret
 
 
-def create_token(user_id: int, minutes: int = 60) -> str:
-    return jwt.encode({"sub": str(user_id), "exp": int(time.time()) + minutes * 60}, _secret(), algorithm="HS256")
+def create_token(user_id: int, minutes: int = 60, *, audience: str | None = None) -> str:
+    claims = {"sub": str(user_id), "exp": int(time.time()) + minutes * 60}
+    if audience is not None:
+        claims["aud"] = audience
+    return jwt.encode(claims, _secret(), algorithm="HS256")
 
 
-def read_token(token: str) -> int | None:
-    """The user id inside a valid, unexpired token, otherwise None."""
+def read_token(token: str, *, audience: str | None = None) -> int | None:
+    """Read the user ID from a valid token issued for the expected audience."""
     try:
-        claims = jwt.decode(token, _secret(), algorithms=["HS256"], options={"require": ["sub", "exp"]})
+        claims = jwt.decode(
+            token, _secret(), algorithms=["HS256"], audience=audience,
+            options={"require": ["sub", "exp"]},
+        )
         user_id = int(claims["sub"])
     except (jwt.PyJWTError, TypeError, ValueError, OverflowError):
         return None

@@ -62,3 +62,19 @@ export function getConnectionStatus() {
 export function getMySubscription() {
   return apiRequest('/api/subscriptions/me')
 }
+
+
+export function loginCustomer({ email, password }) {
+  return apiRequest('/api/auth/customer/login', {
+    method: 'POST',
+    cache: 'no-store',
+    body: JSON.stringify({ email: email.trim(), password }),
+  })
+}
+
+export function getCustomerProfile(accessToken) {
+  return apiRequest('/api/auth/customer/me', {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+}
