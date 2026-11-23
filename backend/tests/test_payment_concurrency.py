@@ -20,7 +20,9 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.connection import create_database_engine
-from app.models import Package, Payment, PaymentEvent, Purchase, User
+from app.models import (
+    ActivationAttempt, Package, Payment, PaymentEvent, Purchase, Subscription, User, WiFiSession,
+)
 from app.services.callback_processing import process_callback
 from app.services.payment_event_service import EventSource, record_received_event
 
@@ -89,6 +91,10 @@ def committed(engine):
             (PaymentEvent.payment_id == ids["payment"])
             | (PaymentEvent.id.in_(ids["events"]))
         ))
+        session_ids = select(WiFiSession.id).where(WiFiSession.payment_id == ids["payment"])
+        cleanup.execute(delete(ActivationAttempt).where(ActivationAttempt.session_id.in_(session_ids)))
+        cleanup.execute(delete(WiFiSession).where(WiFiSession.payment_id == ids["payment"]))
+        cleanup.execute(delete(Subscription).where(Subscription.payment_id == ids["payment"]))
         cleanup.execute(delete(Payment).where(Payment.id == ids["payment"]))
         cleanup.execute(delete(Purchase).where(Purchase.id == ids["purchase"]))
         cleanup.execute(delete(Package).where(Package.id == ids["package"]))
@@ -152,3 +158,14 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
         assert payment.mpesa_receipt_number == committed["receipt"]
         assert purchase.status == "paid"
         assert successful == [committed["payment"]]
+        subscription = check.scalars(
+            select(Subscription).where(Subscription.payment_id == payment.id)
+        ).one()
+        session = check.scalars(
+            select(WiFiSession).where(WiFiSession.payment_id == payment.id)
+        ).one()
+        attempt = check.scalars(
+            select(ActivationAttempt).where(ActivationAttempt.session_id == session.id)
+        ).one()
+        assert session.subscription_id == subscription.id
+        assert attempt.status == "succeeded"
