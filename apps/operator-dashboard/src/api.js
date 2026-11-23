@@ -39,3 +39,42 @@ export async function getStaffProfile(accessToken) {
 
   return response.json()
 }
+
+export class StaffSessionError extends Error {
+  constructor() {
+    super('Your staff session is unavailable. Please sign in again.')
+    this.name = 'StaffSessionError'
+  }
+}
+
+async function readStaffPaymentData(path, accessToken, signal) {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+    signal,
+  })
+
+  if (response.status === 401 || response.status === 403) {
+    throw new StaffSessionError()
+  }
+
+  if (response.status === 404) {
+    throw new Error('This payment could not be found.')
+  }
+
+  if (!response.ok) {
+    throw new Error('Could not load payment records. Please try again.')
+  }
+
+  return response.json()
+}
+
+export function listStaffPayments(accessToken, { limit = 50, offset = 0, status, signal } = {}) {
+  const query = new URLSearchParams({ limit, offset })
+  if (status) query.set('status', status)
+  return readStaffPaymentData(`/api/payments?${query}`, accessToken, signal)
+}
+
+export function getStaffPayment(accessToken, paymentId, { signal } = {}) {
+  return readStaffPaymentData(`/api/payments/${encodeURIComponent(paymentId)}`, accessToken, signal)
+}
