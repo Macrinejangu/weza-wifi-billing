@@ -65,7 +65,7 @@ There is no `amount` field. The amount always comes from the stored purchase, so
 
 ### Errors
 
-Every error from our code has this body. `payment_id` appears only when a payment row exists.
+Every error from this endpoint has this body, which differs from the plain `{"detail": ...}` errors of the earlier endpoints above. `payment_id` appears only when a payment row exists.
 
 ```json
 {"detail": "Purchase not found.", "code": "purchase_not_found", "payment_id": 7}
