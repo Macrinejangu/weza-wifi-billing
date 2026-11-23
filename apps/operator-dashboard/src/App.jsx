@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getStaffProfile, signInStaff } from './api.js'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
@@ -6,6 +6,7 @@ import CustomersPage, { initialCustomers } from './pages/CustomersPage.jsx'
 import CustomerProfilePage from './pages/CustomerProfilePage.jsx'
 import PackagesPage from './pages/PackagesPage.jsx'
 import PaymentsPage from './pages/PaymentsPage.jsx'
+import StaffPaymentsPage from './pages/StaffPaymentsPage.jsx'
 import ConnectionIssuesPage from './pages/ConnectionIssuesPage.jsx'
 import ActivityHistoryPage from './pages/ActivityHistoryPage.jsx'
 import SystemSettingsPage from './pages/SystemSettingsPage.jsx'
@@ -29,13 +30,14 @@ function getTokenExpiry(accessToken) {
 export default function App() {
   const [staffSession, setStaffSession] = useState(null)
   const expiresAt = staffSession?.expiresAt
+  const signOut = useCallback(() => setStaffSession(null), [])
 
   useEffect(() => {
     if (!expiresAt) return undefined
 
-    const timeout = window.setTimeout(() => setStaffSession(null), Math.max(0, expiresAt - Date.now()))
+    const timeout = window.setTimeout(signOut, Math.max(0, expiresAt - Date.now()))
     return () => window.clearTimeout(timeout)
-  }, [expiresAt])
+  }, [expiresAt, signOut])
 
   async function handleSignIn(email, password) {
     const accessToken = await signInStaff(email, password)
@@ -89,18 +91,19 @@ export default function App() {
   }
 
   if (staffSession) {
+    const { staff, accessToken } = staffSession
+    const names = staff.full_name.trim().split(/\s+/)
+    const operator = {
+      fullName: staff.full_name,
+      displayName: names[0],
+      initials: names.slice(0, 2).map((name) => name.charAt(0)).join('').toUpperCase(),
+      role: staff.role === 'admin' ? 'Administrator' : 'Operator',
+    }
+
     return (
-      <main className="login-page">
-        <section className="login-panel" aria-labelledby="operator-title">
-          <header className="login-heading">
-            <h1 id="operator-title">Operator dashboard</h1>
-            <p>Signed in as {staffSession.staff.full_name}.</p>
-          </header>
-          <button className="login-submit" type="button" onClick={() => setStaffSession(null)}>
-            Sign out
-          </button>
-        </section>
-      </main>
+      <DashboardLayout operator={operator} activePage="payments" onSignOut={signOut}>
+        <StaffPaymentsPage accessToken={accessToken} onSignOut={signOut} />
+      </DashboardLayout>
     )
   }
 
