@@ -30,6 +30,7 @@ from app.db.session import get_db
 from app.integrations.mpesa.client import DarajaClient
 from app.models import Purchase, User
 from app.payments.payment_service_errors import (
+    AccessAlreadyReserved,
     OutcomeUnknown,
     PaymentAlreadyPending,
     PaymentServiceError,
@@ -65,6 +66,7 @@ PROMPT_MESSAGE = "Check your phone and enter your M-Pesa PIN to complete the pay
 _STATUS_BY_CODE = {
     PurchaseNotFound.code: 404,
     PurchaseNotPayable.code: 409,
+    AccessAlreadyReserved.code: 409,
     PaymentAlreadyPending.code: 409,
     ProviderRejected.code: 502,
     ProviderNotReached.code: 503,
@@ -137,12 +139,18 @@ def start_mpesa_payment(
     not held up.
     """
     try:
-        owned_purchase = db.scalar(select(Purchase.id).where(
+        owned_purchase = db.scalar(select(Purchase).where(
             Purchase.id == data.purchase_id,
             Purchase.user_id == customer.id,
         ))
         if owned_purchase is None:
             raise PurchaseNotFound()
+        if os.getenv("ROUTER_MODE", "").strip().lower() == "mikrotik" and (
+            not owned_purchase.device_mac_address or not owned_purchase.device_ip_address
+        ):
+            return _error_response(
+                409, "hotspot_device_required", "Connect to Weza Wi-Fi and verify your device before paying."
+            )
         if daraja is None:
             return _error_response(
                 503, "payments_not_configured", "Payments are not available right now."

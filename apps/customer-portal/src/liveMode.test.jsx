@@ -49,11 +49,11 @@ async function renderPortal(pathname, search = '') {
 }
 
 test.each([
-  ['/dashboard', 'Connection and subscription details are currently unavailable.'],
+  ['/dashboard', 'Sign in to check your connection.'],
   ['/payments', 'Payment history is currently unavailable.'],
   ['/usage', 'Usage history and sessions are currently unavailable.'],
   ['/profile', 'Account details are currently unavailable.'],
-  ['/package-expired', 'Your subscription status could not be verified.'],
+  ['/package-expired', 'Sign in to check your connection.'],
   ['/confirm-package', 'Live checkout is currently unavailable.'],
 ])('opens %s without demo records, even with stale navigation state', async (path, message) => {
   await renderPortal(path)

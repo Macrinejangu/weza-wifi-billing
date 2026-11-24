@@ -57,6 +57,25 @@ class CustomerPaymentRead(BaseModel):
     amount: int
     package_name: str
     mpesa_receipt_number: str | None
+    simulated: bool = False
+
+
+class CustomerConnectionRead(BaseModel):
+    payment_id: int
+    payment_status: str
+    access_status: str
+    package_name: str
+    mpesa_receipt_number: str | None
+    started_at: datetime | None
+    expires_at: datetime | None
+    server_now: datetime
+    simulated: bool
+
+
+class CustomerMockPaymentRead(BaseModel):
+    payment_id: int
+    purchase_id: int
+    status: str
 
 
 class SessionIn(BaseModel):

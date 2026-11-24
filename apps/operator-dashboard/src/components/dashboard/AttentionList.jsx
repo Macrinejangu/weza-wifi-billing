@@ -34,8 +34,8 @@ const dateTime = new Intl.DateTimeFormat('en-KE', {
 
 export default function AttentionList({ report, onOpenIssues }) {
   const entries = report ? (report.data ?? []).map((record) => ({
-    id: `Session #${record.session_id}`,
-    title: 'Activation failed',
+    id: `Payment #${record.payment_id}`,
+    title: record.activation_status === 'failed' ? 'Activation failed' : 'Awaiting activation',
     description: record.failure_reason,
     payment: `Payment #${record.payment_id}`,
     time: `${dateTime.format(new Date(record.updated_at))} EAT`,
@@ -49,7 +49,7 @@ export default function AttentionList({ report, onOpenIssues }) {
           <p className="section-eyebrow">OPERATIONS</p>
           <h2>Requires Attention</h2>
           <p className="section-description">
-            {report ? 'Latest paid sessions with failed activation' : 'Sample issues that may need operator review'}
+            {report ? 'Paid customers awaiting access or with failed activation' : 'Sample issues that may need operator review'}
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export default function AttentionList({ report, onOpenIssues }) {
         {report && entries.length === 0 && (
           report.error
             ? <p role="alert">Could not load connection issues. Use Refresh to try again.</p>
-            : <p role="status">{report.loading ? 'Loading connection issues…' : 'No paid sessions with failed activation were found.'}</p>
+            : <p role="status">{report.loading ? 'Loading connection issues…' : 'No paid customers are waiting for activation.'}</p>
         )}
         {entries.map((issue) => (
           <article className="attention-item" key={issue.id}>

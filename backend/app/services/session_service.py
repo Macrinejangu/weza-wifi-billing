@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from typing import Callable
+from uuid import uuid4
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import ActivationAttempt, Payment, Subscription, WiFiSession
@@ -83,7 +85,7 @@ def activate_session(
     The provider confirms access separately from the subscription timer.
     Legacy sessions without subscriptions keep their activation-based timer.
     """
-    session = db.get(WiFiSession, session_id, with_for_update=True)
+    session = db.get(WiFiSession, session_id, with_for_update=True, populate_existing=True)
 
     if session is None:
         raise LookupError("Session not found")
@@ -102,11 +104,27 @@ def activate_session(
     purchase = session.payment.purchase
     reconciling = attempt is not None
     subscription = session.subscription
-    if subscription is not None and subscription.end_date <= datetime.now(timezone.utc) and not reconciling:
-        session.status = "EXPIRED"
-        subscription.status = "expired"
-        db.commit()
+    if subscription is not None and subscription.end_date <= datetime.now(timezone.utc):
+        # An unconfirmed router call may still have granted access. Leave it
+        # for the expiry process to revoke before marking the session ended.
+        if not reconciling and session.router_grant_id is None:
+            session.status = "EXPIRED"
+            subscription.status = "expired"
+            db.commit()
         return session
+
+    if attempt is None and router is None:
+        try:
+            authenticator = get_access_authenticator()
+        except RuntimeError:
+            # Activation reports configuration errors through the normal attempt.
+            authenticator = None
+        if isinstance(authenticator, MikroTikAuthenticator):
+            origin = session.payment.raw_callback or {}
+            if not origin.get("mock") and purchase.device_mac_address and session.router_grant_id is None:
+                session.router_grant_id = uuid4().hex
+                db.commit()
+                return activate_session(db, session_id)
 
     if attempt is None:
         attempt = ActivationAttempt(
@@ -125,12 +143,16 @@ def activate_session(
             if not isinstance(get_access_authenticator(), MikroTikAuthenticator):
                 raise RouterActivationUnconfirmed("Reconciliation requires MikroTik mode")
 
+            if session.router_grant_id is None or not session.device_mac_address:
+                raise RouterActivationUnconfirmed("This session has no recorded hotspot grant")
+            lock_hotspot_device(db, session.device_mac_address)
             result = activate_hotspot_device(
                 mac_address=session.device_mac_address,
                 ip_address=session.device_ip_address,
                 download_speed_mbps=purchase.download_speed_mbps,
                 upload_speed_mbps=purchase.upload_speed_mbps,
                 verify_only=True,
+                grant_id=session.router_grant_id,
             )
         elif router is not None:
             # Preserve the existing test and custom-router callback contract.
@@ -156,12 +178,17 @@ def activate_session(
             ):
                 raise RuntimeError("Live activation requires a verified purchase device")
 
-            result = activate_access_device(
-                mac_address=session.device_mac_address,
-                ip_address=session.device_ip_address,
-                download_speed_mbps=purchase.download_speed_mbps,
-                upload_speed_mbps=purchase.upload_speed_mbps,
-            )
+            access = {
+                "mac_address": session.device_mac_address,
+                "ip_address": session.device_ip_address,
+                "download_speed_mbps": purchase.download_speed_mbps,
+                "upload_speed_mbps": purchase.upload_speed_mbps,
+            }
+            if isinstance(authenticator, MikroTikAuthenticator):
+                lock_hotspot_device(db, session.device_mac_address)
+                result = activate_hotspot_device(**access, grant_id=session.router_grant_id)
+            else:
+                result = activate_access_device(**access)
 
         if result.get("status") != "ACTIVE":
             raise RuntimeError("Router did not confirm activation")
@@ -188,6 +215,9 @@ def activate_session(
 
         session.status = "ACTIVE"
         session.activation_status = "succeeded"
+        session.router_identity = result.get("router_identity")
+        session.router_session_id = result.get("router_session_id")
+        session.router_server_name = result.get("server")
         if subscription is not None:
             session.started_at = subscription.start_date
             session.expires_at = subscription.end_date
@@ -199,3 +229,8 @@ def activate_session(
 
     db.commit()
     return session
+
+
+def lock_hotspot_device(db: Session, mac: str) -> None:
+    # Activation and expiry must never change the same device concurrently.
+    db.execute(select(func.pg_advisory_xact_lock(func.hashtext(f"weza-hotspot:{mac}"))))

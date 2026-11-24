@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
-import { listStaffConnectionIssues, StaffSessionError } from '../api.js'
+import { listStaffConnectionIssues, retryStaffActivation, StaffSessionError } from '../api.js'
 import '../styles/connection-issues.css'
 
 const pageSize = 25
@@ -9,15 +9,16 @@ const dateTime = new Intl.DateTimeFormat('en-KE', {
 })
 
 function toIssue(record) {
+  const failed = record.activation_status === 'failed'
   return {
-    id: `Session #${record.session_id}`,
-    title: 'Activation failed',
+    id: record.session_id ? `Session #${record.session_id}` : `Payment #${record.payment_id}`,
+    title: failed ? 'Activation failed' : 'Awaiting activation',
     customer: `Customer #${record.customer_id}`,
     receipt: record.payment_reference || `Payment #${record.payment_id}`,
     paymentId: record.payment_id,
     purchaseId: record.purchase_id,
     time: dateTime.format(new Date(record.updated_at)),
-    status: 'Activation Failed',
+    status: failed ? 'Activation Failed' : 'Awaiting activation',
     payment: 'Successful',
     description: record.failure_reason,
   }
@@ -153,6 +154,7 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
   const [resolutionReason, setResolutionReason] = useState('')
   const [action, setAction] = useState(null)
   const [notice, setNotice] = useState('')
+  const [retrying, setRetrying] = useState(false)
   const detailTitleRef = useRef(null)
   const listTitleRef = useRef(null)
   const returnIssueRef = useRef(null)
@@ -167,9 +169,9 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
   )
   const unresolved = issues.filter((issue) => issue.status !== 'Resolved')
   const metrics = live ? [
-    ['Unresolved Issues', 'Unavailable', 'Resolution records unavailable'],
-    ['Failed Activations', request.loading || request.error ? 'Unavailable' : issues.length, 'Paid failures on this page'],
-    ['Activation Pending', 'Unavailable', 'Waiting cases are outside this list'],
+    ['Unresolved Issues', request.loading || request.error ? 'Unavailable' : issues.length, 'Paid cases on this page'],
+    ['Failed Activations', request.loading || request.error ? 'Unavailable' : issues.filter((issue) => issue.status === 'Activation Failed').length, 'Paid failures on this page'],
+    ['Activation Pending', request.loading || request.error ? 'Unavailable' : issues.filter((issue) => issue.status === 'Awaiting activation').length, 'Waiting cases on this page'],
     ['Resolved', 'Unavailable', 'Resolution records unavailable'],
   ] : [
     ['Unresolved Issues', unresolved.length, 'Require operator review'],
@@ -215,6 +217,27 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
     closeConfirmation()
   }
 
+  async function retryActivation() {
+    if (!selected || retrying) return
+    setRetrying(true)
+    setNotice('')
+    try {
+      const result = await retryStaffActivation(accessToken, selected.paymentId)
+      if (result.outcome === 'activated') {
+        setSelectedId(null)
+        changePage(page)
+        setNotice('Access confirmed. No new payment was requested.')
+      } else {
+        setNotice('Access is still unconfirmed. The payment remains recorded.')
+      }
+    } catch (error) {
+      if (error instanceof StaffSessionError) onSignOut?.()
+      else setNotice('Could not retry access. Check the payment and package status.')
+    } finally {
+      setRetrying(false)
+    }
+  }
+
   if (selected) {
     return (
       <section className="connection-issues-page">
@@ -226,7 +249,12 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
             <p>{selected.description}</p>
             <IssueBadge value={selected.status} /> {!live && <IssueBadge value={selected.severity} />}
           </div>
-          {live && <button type="button" className="connection-issue-primary" disabled>Retry Activation Handshake</button>}
+          {live && (
+            <button type="button" className="connection-issue-primary"
+              disabled={retrying} onClick={retryActivation}>
+              {retrying ? 'Checking access…' : 'Retry access'}
+            </button>
+          )}
           {!live && selected.retryable && selected.status !== 'Resolved' && (
             <button type="button" className="connection-issue-primary" onClick={(event) => openConfirmation(event, 'retry')}>Retry Activation Handshake</button>
           )}
@@ -252,7 +280,7 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
                   {[
                     ['Customer', selected.customer], ['Linked payment', selected.receipt],
                     ['Payment status', selected.payment],
-                    ['Activation status', live || selected.retryable ? 'Activation Failed' : selected.payment === 'Pending' ? 'Not Requested' : 'See incident summary'],
+                    ['Activation status', live ? selected.status : selected.retryable ? 'Activation Failed' : selected.payment === 'Pending' ? 'Not Requested' : 'See incident summary'],
                     ...(live ? [['Payment ID', selected.paymentId], ['Purchase ID', selected.purchaseId]] : []),
                     [live ? 'Last updated (EAT)' : 'Reported time', selected.time], ['Current status', selected.status],
                   ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
@@ -375,7 +403,7 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
               ))}
               {!visible.length && <tr><td colSpan={7}>
                 {live ? request.error ? <span role="alert">{request.error}</span>
-                  : <span role="status">{request.loading ? 'Loading connection issues…' : issues.length ? 'No records match your search.' : 'No paid sessions with failed activation were found.'}</span>
+                  : <span role="status">{request.loading ? 'Loading connection issues…' : issues.length ? 'No records match your search.' : 'No paid customers are waiting for activation.'}</span>
                   : 'No sample incidents match your filters.'}
               </td></tr>}
             </tbody>

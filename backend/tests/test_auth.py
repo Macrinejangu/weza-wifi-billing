@@ -328,7 +328,7 @@ def test_connection_issues_require_active_staff(client, db):
     assert client.get("/api/connection-issues", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
 
 
-def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostics(client, db, user, package):
+def test_connection_issues_show_paid_customers_waiting_or_failed_without_raw_diagnostics(client, db, user, package):
     staff = add_user(db)
     headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
     assert client.get("/api/connection-issues", headers=headers).json() == []
@@ -350,7 +350,9 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
 
     payment, failed = create_session("paid-failed", "successful", "failed", "FAILED")
     create_session("unpaid-failed", "pending", "failed", "FAILED")
-    create_session("paid-waiting", "successful", "waiting", "ACTIVATING")
+    waiting_payment, waiting = create_session("paid-waiting", "successful", "waiting", "ACTIVATING")
+    missing_purchase = make_purchase(db, user, package, key="paid-no-session")
+    missing_payment = make_payment(db, missing_purchase, checkout="paid-no-session", status="successful")
     db.add_all([
         ActivationAttempt(session_id=failed.id, attempt_number=1, status="failed", error_code="RouterActivationError"),
         ActivationAttempt(session_id=failed.id, attempt_number=2, status="failed", error_code="TimeoutError", error_message="internal diagnostic text"),
@@ -359,7 +361,13 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
 
     response = client.get("/api/connection-issues", headers=headers)
     assert response.status_code == 200
-    [issue] = response.json()
+    issues = {record["payment_id"]: record for record in response.json()}
+    assert set(issues) == {payment.id, waiting_payment.id, missing_payment.id}
+    assert issues[waiting_payment.id]["session_id"] == waiting.id
+    assert issues[waiting_payment.id]["activation_status"] == "waiting"
+    assert issues[missing_payment.id]["session_id"] is None
+    assert issues[missing_payment.id]["activation_status"] == "not_started"
+    issue = issues[payment.id]
     assert issue["session_id"] == failed.id
     assert issue["customer_id"] == user.id
     assert issue["payment_id"] == payment.id
@@ -368,7 +376,7 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
     assert issue["activation_status"] == "failed"
     assert issue["failure_reason"] == "The activation request timed out."
     assert "internal diagnostic text" not in response.text
-    assert client.get("/api/connection-issues?offset=1", headers=headers).json() == []
+    assert client.get("/api/connection-issues?offset=3", headers=headers).json() == []
 
 
 def test_customer_login_reads_only_its_own_profile(client, db):

@@ -2,12 +2,10 @@ import { ArrowLeft, ArrowRight, Smartphone, Wifi } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
-import { createCustomerPurchase, startMpesaPayment } from '../services/api.js'
+import { checkoutMode, packageSupportsCheckout } from '../checkoutSettings.js'
+import { createCustomerPurchase, getCheckoutDeviceReference, startMpesaPayment, submitMockPayment } from '../services/api.js'
 
-const sandboxEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
-
-const sandboxPackageId = Number(import.meta.env.VITE_SANDBOX_PACKAGE_ID)
+const requireHotspotDevice = import.meta.env.VITE_REQUIRE_HOTSPOT_DEVICE === 'true'
 const kenyanMobile = /^(?:\+?254|0)([17][0-9]{8})$/
 
 const retryableErrors = {
@@ -38,6 +36,10 @@ function paymentErrorFeedback(error) {
 
   if (retryMessage) return { kind: 'error', text: retryMessage }
 
+  if (error.code === 'access_already_reserved' || error.code === 'hotspot_device_required') {
+    return { kind: 'blocked', text: error.message }
+  }
+
   if (error.status === 404 || error.code === 'purchase_not_payable') {
     return {
       kind: 'blocked',
@@ -60,12 +62,10 @@ export default function ConfirmPackage({ accessToken }) {
   const requestInProgress = useRef(false)
   const purchaseRequest = useRef(null)
 
-  const isSandboxCheckout =
-    sandboxEnabled &&
-    selectedPackage?.id === sandboxPackageId
-
-  const showForm = Boolean(selectedPackage && (demoDataEnabled || (isSandboxCheckout && accessToken)))
-  const isSandboxSubmission = isSandboxCheckout && !demoDataEnabled
+  const checkoutAvailable = packageSupportsCheckout(selectedPackage?.id)
+  const showForm = Boolean(selectedPackage && (demoDataEnabled || (checkoutAvailable && accessToken)))
+  const submitPayment = checkoutAvailable && !demoDataEnabled
+  const simulatePayment = submitPayment && checkoutMode === 'mock'
   const paymentLocked = feedback?.kind === 'pending' || feedback?.kind === 'blocked'
   const isPhoneError = feedback?.kind === 'phone-error'
   const isAlert = feedback && feedback.kind !== 'pending' && feedback.kind !== 'preview'
@@ -86,7 +86,7 @@ export default function ConfirmPackage({ accessToken }) {
       return
     }
 
-    if (!isSandboxSubmission) {
+    if (!submitPayment) {
       setFeedback({
         kind: 'preview',
         text: 'This is a preview. No M-Pesa prompt was sent.',
@@ -105,11 +105,21 @@ export default function ConfirmPackage({ accessToken }) {
         purchaseRequest.current = { checkoutKey, accessToken, key: crypto.randomUUID() }
       }
 
-      purchase = await createCustomerPurchase({
+      const checkout = {
         accessToken,
         packageId: selectedPackage.id,
         idempotencyKey: purchaseRequest.current.key,
-      })
+      }
+      let deviceReference
+      if (!simulatePayment && requireHotspotDevice) {
+        const device = await getCheckoutDeviceReference(checkout).catch(() => null)
+        if (!device?.device_reference) {
+          setFeedback({ kind: 'error', text: 'We could not verify your device. Connect to Weza Wi-Fi and try again.' })
+          return
+        }
+        deviceReference = device.device_reference
+      }
+      purchase = await createCustomerPurchase({ ...checkout, deviceReference })
       if (!Number.isSafeInteger(purchase?.id) || purchase.id <= 0) {
         setFeedback({ kind: 'error', text: 'Could not confirm the purchase. Please try again.' })
         return
@@ -119,20 +129,22 @@ export default function ConfirmPackage({ accessToken }) {
         return
       }
 
-      const payment = await startMpesaPayment({
+      const payment = await (simulatePayment ? submitMockPayment : startMpesaPayment)({
         accessToken,
         purchaseId: purchase.id,
         phoneNumber: `254${match[1]}`,
       })
 
-      if (payment?.status !== 'pending' || payment.purchase_id !== purchase.id) {
+      if (payment?.status !== (simulatePayment ? 'successful' : 'pending') || payment.purchase_id !== purchase.id) {
         setFeedback(paymentErrorFeedback({}))
         return
       }
 
       setFeedback({
         kind: 'pending',
-        text: 'Check your phone for the M-Pesa prompt. Your payment is pending confirmation.',
+        text: simulatePayment
+          ? 'Simulated payment recorded. No money was collected.'
+          : 'Check your phone for the M-Pesa prompt. Your payment is pending confirmation.',
         paymentId: payment.payment_id,
       })
     } catch (error) {
@@ -202,8 +214,8 @@ export default function ConfirmPackage({ accessToken }) {
 
           {!showForm && (
             <p role="status" className="mt-4 text-sm text-[#655f75]">
-              {isSandboxCheckout && !accessToken ? (
-                <>Sign in to continue. <Link to="/login" className="underline">Sign in</Link></>
+              {checkoutAvailable && !accessToken ? (
+                <>Sign in to continue. <Link to="/login" state={{ returnPackageId: selectedPackage.id }} className="underline">Sign in</Link></>
               ) : 'Live checkout is currently unavailable.'}
             </p>
           )}
@@ -230,9 +242,9 @@ export default function ConfirmPackage({ accessToken }) {
                 className="min-h-11 w-full rounded-lg border border-[#edece8] bg-[#f4f3f0] px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#726b91]"
               />
               <p id="checkout-help" className="mt-2 text-sm text-[#655f75]">
-                {isSandboxSubmission
+                {submitPayment && !simulatePayment
                   ? 'Sandbox checkout. Use the agreed test number. Enter your PIN only on your phone.'
-                  : 'Use a sample number for this preview.'}
+                  : 'Use a sample number. This mode does not send a payment prompt.'}
               </p>
 
               <button
@@ -241,10 +253,10 @@ export default function ConfirmPackage({ accessToken }) {
                 className="package-button disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting
-                  ? 'Requesting M-Pesa prompt…'
-                  : isSandboxSubmission
-                    ? 'Request M-Pesa payment'
-                    : 'Preview M-Pesa payment'}
+                  ? 'Submitting payment…'
+                  : simulatePayment
+                    ? 'Simulate payment'
+                    : submitPayment ? 'Request M-Pesa payment' : 'Preview M-Pesa payment'}
                 <ArrowRight size={17} aria-hidden="true" />
               </button>
 

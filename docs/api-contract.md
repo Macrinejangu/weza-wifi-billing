@@ -162,6 +162,25 @@ python -m app.replay_mpesa_callback EVENT_ID
 
 Replay uses the stored callback, repeats the same verification and status query, and records a separate audit event linked to the original event ID in the payload. It sends no STK prompt. Run it once the initiation IDs are saved or the query service has recovered. The original audit row stays intact. Repeat replay cannot settle an already successful payment twice. Automated reconciliation is separate.
 
+If no callback arrived, an authorized operator with the sandbox settings can
+check a pending payment directly using its saved Daraja reference:
+
+```sh
+cd backend
+python -m app.recheck_mpesa_payment PAYMENT_ID
+```
+
+The command sends no new payment prompt. It records the query result and
+marks a verified failure as failed. A paid query alone does not include the
+receipt needed to grant access, so the payment remains pending for review.
+
+Only a freshly committed successful payment starts access fulfilment.
+Duplicate, failed and unverified notifications do not run activation again.
+An activation exception cannot undo the payment or change the normal provider
+acknowledgement. A paid purchase without confirmed access appears in the staff
+issues list. Staff may retry access from that list without sending another
+payment prompt.
+
 Uvicorn access log entries for callback paths are suppressed. Configure proxy, tunnel and hosting access logs to omit or redact the secret path before exposing the route.
 
 ### Unverified (not confirmed from official Daraja pages)

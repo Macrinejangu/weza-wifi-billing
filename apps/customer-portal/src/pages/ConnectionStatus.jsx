@@ -1,5 +1,7 @@
 import { ArrowRight, CheckCircle2, Clock, Headset, WifiOff } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import { getMyConnection } from '../services/api.js'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { useCheckout } from '../context/CheckoutContext'
 
@@ -16,7 +18,7 @@ const views = {
     label: 'Activation in progress',
     title: 'Payment received',
     description: 'We’re setting up your internet connection.',
-    note: 'Please do not pay again. Your package validity starts once activation succeeds.',
+    note: 'Please do not pay again. Your package time started when your payment was confirmed.',
     tone: 'bg-[#eef3cc] text-[#414900]',
   },
   active: {
@@ -33,6 +35,13 @@ const views = {
     description: 'We received your payment but could not activate your internet.',
     note: 'Please do not pay again. Contact support and share your payment reference if available.',
     tone: 'bg-amber-100 text-amber-900',
+  },
+  expired: {
+    icon: Clock,
+    label: 'Package expired',
+    title: 'Your package has ended',
+    description: 'Choose another package to get back online.',
+    tone: 'bg-[#f0eef6] text-[#47415e]',
   },
   unknown: {
     icon: Clock,
@@ -68,12 +77,100 @@ export default function ConnectionStatus() {
   const preview = searchParams.get('preview')
   const isPreview = demoDataEnabled && previewStates.includes(preview)
   const state = isPreview ? preview : getConnectionState(paymentStatus, activationStatus)
-  const view = views[state]
+  return <ConnectionView
+    state={state}
+    isPreview={isPreview}
+    packageName={isPreview ? 'Daily Connect' : selectedPackage?.name}
+    receipt={isPreview ? 'DEMO-RECEIPT-001' : transaction?.mpesa_receipt_number}
+    reference={transaction?.reference ?? transaction?.checkout_request_id}
+  />
+}
+
+export function CustomerConnectionStatus({ accessToken, onSessionExpired }) {
+  const [searchParams] = useSearchParams()
+  const paymentId = searchParams.get('payment')
+  const [refresh, setRefresh] = useState(0)
+  const [result, setResult] = useState(null)
+  const [tick, setTick] = useState(0)
+  const current = result?.paymentId === paymentId && result?.accessToken === accessToken
+    ? result : null
+
+  useEffect(() => {
+    if (!accessToken) return undefined
+    const controller = new AbortController()
+    getMyConnection({ accessToken, paymentId, signal: controller.signal })
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setResult({ accessToken, paymentId, data, receivedAt: performance.now() })
+        }
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setResult({ accessToken, paymentId, error })
+      })
+    return () => controller.abort()
+  }, [accessToken, paymentId, refresh])
+
+  const data = current?.data
+  useEffect(() => {
+    if (!accessToken || !data?.expires_at) return undefined
+    const interval = window.setInterval(() => setTick(performance.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [accessToken, data])
+
+  useEffect(() => {
+    if (!accessToken || data?.access_status !== 'activating') return undefined
+    const timeout = window.setTimeout(() => setRefresh((value) => value + 1), 5000)
+    return () => window.clearTimeout(timeout)
+  }, [accessToken, data])
+
+  if (!accessToken || current?.error?.status === 401) {
+    return (
+      <section className="page-heading">
+        <h1>Connection status</h1>
+        <p role="status">Sign in to check your connection.</p>
+        <Link to="/login" state={{ returnConnection: true, returnPaymentId: paymentId }}
+          onClick={onSessionExpired} className={primaryLink}>Sign in</Link>
+      </section>
+    )
+  }
+
+  if (!current || current.error || !data) {
+    return (
+      <section className="page-heading">
+        <h1>Connection status</h1>
+        <p role="status">{!current ? 'Checking your connection…' : current.error
+          ? 'Connection status could not be checked.' : 'No paid package found yet.'}</p>
+        {current?.error
+          ? <button type="button" onClick={() => setRefresh((value) => value + 1)}>Check again</button>
+          : current && <Link to="/packages" className={primaryLink}>Browse packages</Link>}
+      </section>
+    )
+  }
+
+  const expiry = Date.parse(data.expires_at)
+  const serverNow = Date.parse(data.server_now) + Math.max(0, tick - current.receivedAt)
+  const remaining = Number.isFinite(expiry) && Number.isFinite(serverNow)
+    ? Math.max(0, Math.ceil((expiry - serverNow) / 1000)) : null
+  const state = remaining === 0 ? 'expired' : data.access_status
+
+  return <ConnectionView
+    state={state}
+    packageName={data.package_name}
+    receipt={data.mpesa_receipt_number}
+    remaining={remaining}
+    paymentId={data.payment_id}
+    simulated={data.simulated}
+    onCheck={() => setRefresh((value) => value + 1)}
+  />
+}
+
+function ConnectionView({ state, isPreview, packageName, receipt, reference, remaining, paymentId, simulated, onCheck }) {
+  const view = simulated && state === 'active'
+    ? { ...views.active, label: 'Simulated access active', title: 'Test access is active',
+        description: 'The test package has started.' }
+    : Object.hasOwn(views, state) ? views[state] : views.unknown
   const Icon = view.icon
   const showPaymentDetails = state !== 'unconfirmed'
-  const packageName = isPreview ? 'Daily Connect' : selectedPackage?.name
-  const receipt = isPreview ? 'DEMO-RECEIPT-001' : transaction?.mpesa_receipt_number
-  const reference = transaction?.reference ?? transaction?.checkout_request_id
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#f8f7f4] px-4 py-8 sm:py-12">
@@ -81,9 +178,9 @@ export default function ConnectionStatus() {
         aria-labelledby="connection-status-title"
         className="w-full max-w-md rounded-2xl border border-[#ebe9e5] bg-white p-5 text-center text-[#17152d] shadow-sm sm:p-7"
       >
-        {isPreview && (
+        {(isPreview || simulated) && (
           <p className="mb-4 text-xs font-semibold text-[#585172]">
-            Development preview · Sample transaction
+            {simulated ? 'Simulated connection. No router was contacted.' : 'Development preview · Sample transaction'}
           </p>
         )}
 
@@ -110,11 +207,17 @@ export default function ConnectionStatus() {
             )}
             {(receipt || reference) && (
               <div className="grid grid-cols-2 gap-3">
-                <dt className="text-[#57545f]">{receipt ? 'M-Pesa receipt' : 'Request reference'}</dt>
+                <dt className="text-[#57545f]">{receipt ? (simulated ? 'Test receipt' : 'M-Pesa receipt') : 'Request reference'}</dt>
                 <dd className="break-all text-right font-medium">{receipt ?? reference}</dd>
               </div>
             )}
           </dl>
+        )}
+
+        {remaining != null && (
+          <p className="mt-4 font-semibold">
+            Time left: {Math.floor(remaining / 60)} min {remaining % 60} sec
+          </p>
         )}
 
         {view.note && (
@@ -124,13 +227,17 @@ export default function ConnectionStatus() {
         )}
 
         <div className="mt-6 space-y-3">
-          {state === 'active' && (
+          {state === 'expired' && <Link to="/packages" className={primaryLink}>Browse packages</Link>}
+          {onCheck && state !== 'expired' && (
+            <button type="button" onClick={onCheck} className={secondaryLink}>Check connection status</button>
+          )}
+          {state === 'active' && !onCheck && (
             <Link to="/dashboard" className={primaryLink}>
               View overview <ArrowRight aria-hidden="true" size={17} />
             </Link>
           )}
           {state === 'unconfirmed' && (
-            <Link to="/payment-status" className={primaryLink}>
+            <Link to={paymentId ? `/payment-status?payment=${paymentId}` : '/payment-status'} className={primaryLink}>
               View payment status <ArrowRight aria-hidden="true" size={17} />
             </Link>
           )}

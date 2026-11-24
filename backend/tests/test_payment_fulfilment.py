@@ -3,7 +3,8 @@
 create_session and activate_session belong to WEZA-54 and are replaced with
 fakes here, so these tests prove only OUR logic: outcome classification,
 error containment, and always ending the transaction. Database-backed tests
-live in test_payment_fulfilment_db.py.
+live in test_payment_fulfilment_db.py, and the real race is in
+test_fulfilment_concurrency.py.
 """
 from types import SimpleNamespace
 
@@ -17,7 +18,7 @@ SESSION_ID = 7
 
 
 class FakeDb:
-    """Counts rollbacks; fulfil_payment must always end its transaction."""
+    """Count how often fulfilment ends its transaction."""
 
     def __init__(self) -> None:
         self.rollbacks = 0

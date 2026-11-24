@@ -153,6 +153,13 @@ export function listStaffConnectionIssues(accessToken, { limit = 50, offset = 0,
   })
 }
 
+export function retryStaffActivation(accessToken, paymentId) {
+  return readStaffData(`/api/connection-issues/${paymentId}/retry`, accessToken, {
+    method: 'POST',
+    errorMessage: 'Could not retry this activation. Check the package and payment status.',
+  })
+}
+
 export function getStaffSettings(accessToken, { signal } = {}) {
   return readStaffData('/api/staff/settings', accessToken, {
     signal,

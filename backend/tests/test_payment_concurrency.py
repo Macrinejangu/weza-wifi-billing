@@ -1,4 +1,4 @@
-"""Two-connection concurrency test for callback settlement (WEZA-50).
+"""Two-connection concurrency test for callback settlement (WEZA-50, WEZA-51).
 
 Every other test runs inside one rolled-back transaction, which cannot show
 a real race. This test commits real rows, then delivers the SAME callback on
@@ -7,7 +7,13 @@ two separate database connections at the same instant.
 A barrier inside the fake status query makes the race certain: both threads
 have read the payment as 'pending' in phase 1 before either one settles.
 Only the SELECT ... FOR UPDATE in settle_payment can then prevent a double
-apply. The rows are deleted afterwards because they were really committed.
+apply. Fulfilment is the real one: after the race there must be exactly one
+subscription, one session linked to it, and one succeeded attempt.
+
+The rows are deleted afterwards because they were really committed. Cleanup
+removes children before parents (foreign keys), including session,
+attempt and subscription rows, so a failure here can never leave data that
+breaks other tests.
 """
 
 import os
@@ -21,7 +27,14 @@ from sqlalchemy.orm import Session
 
 from app.db.connection import create_database_engine
 from app.models import (
-    ActivationAttempt, Package, Payment, PaymentEvent, Purchase, Subscription, User, WiFiSession,
+    ActivationAttempt,
+    Package,
+    Payment,
+    PaymentEvent,
+    Purchase,
+    Subscription,
+    User,
+    WiFiSession,
 )
 from app.services.callback_processing import process_callback
 from app.services.payment_event_service import EventSource, record_received_event
@@ -85,7 +98,9 @@ def committed(engine):
 
     yield ids
 
-    # Delete children before parents (foreign keys).
+    # Delete children before parents (foreign keys):
+    # events, attempts, sessions, subscriptions, payments, purchases,
+    # package, user.
     with Session(engine) as cleanup:
         cleanup.execute(delete(PaymentEvent).where(
             (PaymentEvent.payment_id == ids["payment"])
@@ -158,6 +173,11 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
         assert payment.mpesa_receipt_number == committed["receipt"]
         assert purchase.status == "paid"
         assert successful == [committed["payment"]]
+
+        # Only the delivery that applied the success started fulfilment, so
+        # there is exactly one subscription, session and attempt (.one()
+        # fails on zero or two).
+        assert sorted(r.fulfilment is not None for r in results) == [False, True]
         subscription = check.scalars(
             select(Subscription).where(Subscription.payment_id == payment.id)
         ).one()

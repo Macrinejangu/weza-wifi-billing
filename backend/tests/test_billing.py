@@ -251,19 +251,19 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     session = create_session(db, payment.id)
     calls = []
 
-    def activate_once(**kwargs):
-        calls.append("activate")
-        raise RouterActivationUnconfirmed("Router timed out")
+    grant_ids = set()
 
-    def verify_only(**kwargs):
-        assert kwargs["verify_only"] is True
+    def router_call(**kwargs):
+        grant_ids.add(kwargs["grant_id"])
+        if not kwargs.get("verify_only"):
+            calls.append("activate")
+            raise RouterActivationUnconfirmed("Router timed out")
         calls.append("verify")
         if calls.count("verify") == 1:
             raise RouterActivationUnconfirmed("Router has not confirmed the session")
         return {"status": "ACTIVE"}
 
-    monkeypatch.setattr(session_service, "activate_access_device", activate_once)
-    monkeypatch.setattr(session_service, "activate_hotspot_device", verify_only)
+    monkeypatch.setattr(session_service, "activate_hotspot_device", router_call)
     endpoint = f"/api/sessions/{session.id}/activate"
     headers = staff_headers(db, monkeypatch)
 
@@ -279,6 +279,7 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     assert response.json()["started_at"] is not None
     assert client.post(endpoint, headers=headers).status_code == 200
     assert calls == ["activate", "verify", "verify"]
+    assert grant_ids == {db.get(type(session), session.id).router_grant_id}
 
     attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()
     assert attempt.status == "succeeded"
