@@ -13,7 +13,7 @@ Use a local PostgreSQL database migrated with `python -m alembic upgrade head` f
 
 Set a unique random `JWT_SECRET` in the root `.env` and run `python -m app.create_staff` from `backend/` to create a staff account.
 
-Package creation, editing, and deactivation also require a bearer token from `POST /api/auth/login`. Send the token in the `Authorization` header. An active customer receives HTTP 403. Missing, invalid, or expired tokens and suspended staff receive HTTP 401. Public package viewing stays available.
+Package management is independent of the payment mode. Staff can read the complete catalogue with `GET /api/packages/staff`. Creation, editing and deactivation require an administrator token from `POST /api/auth/login`. Public package viewing shows only active packages. Package changes are recorded in the staff audit log. Existing purchases keep their saved package terms.
 
 | Request | Required input | Success response |
 | --- | --- | --- |
@@ -31,6 +31,12 @@ For session activation and detail, send the token from `POST /api/auth/login` in
 Session responses include `id`, `status`, `activation_status`, `failure_reason`, `started_at` and `expires_at`. See [session states](session-states.md) for transitions.
 
 Invalid input returns 422 with validation details. Missing records or inactive packages at purchase creation return 404 with a `detail` message. Reusing a purchase key for a different request, paying a non-pending purchase, or creating a session for an unconfirmed payment returns 400 with a `detail` message. A failed router simulation returns 502 and records the failed activation attempt.
+
+## Customer registration and guided support
+
+- `POST /api/auth/customer/register` accepts `full_name`, `email`, `phone`, and `password`. A new customer receives 201 and signs in at `POST /api/auth/customer/login`. The route creates customer accounts only and returns 409 for duplicate account details.
+- `GET /api/support/faqs` returns public help topics and their answer steps.
+- `PUT /api/support/faqs/{faq_id}` accepts `question` and `steps` from an authenticated administrator. Successful edits return the saved answer and appear in the staff audit log.
 
 ## Authenticated customer checkout
 

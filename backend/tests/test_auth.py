@@ -105,6 +105,7 @@ PACKAGE_PAYLOAD = {
     ("customer", "active", 60, 403),
     ("operator", "suspended", 60, 401),
     ("operator", "active", -1, 401),
+    ("operator", "active", 60, 403),
 ])
 def test_package_writes_reject_unauthorized_requests(client, db, package, role, status, minutes, expected):
     headers = {}
@@ -120,15 +121,12 @@ def test_package_writes_reject_unauthorized_requests(client, db, package, role, 
     assert db.query(type(package)).count() == 1
 
 
-@pytest.mark.parametrize("role", ["operator", "admin"])
-def test_staff_package_writes_require_mock_mode(client, db, monkeypatch, role):
-    add_user(db, role=role)
+def test_admin_manages_packages_when_mock_payments_are_off(client, db, monkeypatch):
+    add_user(db, role="admin")
     token = login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
-    assert client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers).status_code == 404
 
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
     invalid_package = {**PACKAGE_PAYLOAD, "duration_minutes": 0}
     assert client.post("/api/packages/", json=invalid_package, headers=headers).status_code == 422
     created = client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers)
@@ -136,16 +134,13 @@ def test_staff_package_writes_require_mock_mode(client, db, monkeypatch, role):
     path = f"/api/packages/{created.json()['id']}"
     updated_package = {**PACKAGE_PAYLOAD, "price": 30, "is_active": True}
 
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
-    assert client.put(path, json=updated_package, headers=headers).status_code == 404
-    assert client.delete(path, headers=headers).status_code == 404
-    assert client.get("/api/packages/").json()[0]["price"] == 20
-
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
     updated = client.put(path, json=updated_package, headers=headers)
     assert updated.status_code == 200 and updated.json()["price"] == 30
+    assert client.get("/api/packages/").json()[0]["price"] == 30
     assert client.delete(path, headers=headers).status_code == 200
     assert client.get("/api/packages/").json() == []
+    staff_catalogue = client.get("/api/packages/staff", headers=headers)
+    assert staff_catalogue.json()[0]["is_active"] is False
 
 
 @pytest.mark.parametrize("stored_hash", ["missing-separator", "z" * 32 + "$" + "0" * 128,

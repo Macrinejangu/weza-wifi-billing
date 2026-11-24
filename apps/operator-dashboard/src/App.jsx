@@ -113,7 +113,7 @@ export default function App() {
         ) : staffPage === 'sessions' ? (
           <SessionsPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'packages' ? (
-          <PackagesPage live />
+          <PackagesPage live accessToken={accessToken} canManage={staff.role === 'admin'} onSignOut={signOut} />
         ) : staffPage === 'customers' ? (
           <CustomersPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'network-devices' ? (

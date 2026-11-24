@@ -25,7 +25,7 @@ export function AccountForm({ title, description, children, footer }) {
   )
 }
 
-export function AccountField({ label, name, type = 'text', autoComplete, placeholder, minLength }) {
+export function AccountField({ label, name, type = 'text', autoComplete, placeholder, minLength, maxLength }) {
   const [visible, setVisible] = useState(false)
   const isPassword = type === 'password'
   const inputType = isPassword && visible ? 'text' : type
@@ -41,6 +41,7 @@ export function AccountField({ label, name, type = 'text', autoComplete, placeho
           autoComplete={autoComplete}
           placeholder={placeholder}
           minLength={minLength}
+          maxLength={maxLength}
           required
           className={`min-h-11 w-full rounded-lg border border-[#edece8] bg-[#f4f3f0] px-3 py-2 focus-visible:outline-2 focus-visible:outline-[#726b91] ${isPassword ? 'pr-12' : ''}`}
         />

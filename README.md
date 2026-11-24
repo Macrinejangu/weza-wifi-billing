@@ -90,6 +90,8 @@ and add the frontend origin to the API's `CORS_ORIGINS`.
 
 ### Test a checkout and see the expiry
 
+See the [pilot handover checklist](docs/pilot-handover.md) for a clean setup and acceptance steps.
+
 Use a disposable database with one customer, one staff account and an active
 hotspot package. Apply migrations before starting the API. For a simulated
 checkout, set `ENABLE_MOCK_PAYMENTS=true` and `ROUTER_MODE=mock` on the backend.

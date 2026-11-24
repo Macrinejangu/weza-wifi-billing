@@ -68,3 +68,17 @@
 .system-settings-tile dl > div { display: flex; justify-content: space-between; gap: 8px; }
 .system-settings-tile dd { margin: 0; text-align: right; }
 .system-settings-tile .system-settings-badge { padding: 3px 6px; border-radius: 999px; background: #eaf4b8; color: #414c12; }
+
+.support-faq-form label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.support-faq-form textarea {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #d8d5df;
+  border-radius: 0.5rem;
+  font: inherit;
+  resize: vertical;
+}
