@@ -1,4 +1,4 @@
-"""Process one stored M-Pesa callback end to end (WEZA-50).
+"""Process one stored M-Pesa callback end to end (WEZA-50, WEZA-51).
 
 The route has already passed the security gates and saved the raw message as
 a 'received' audit event. This module then runs:
@@ -7,6 +7,9 @@ a 'received' audit event. This module then runs:
   status query. The query is a network call, so it must never run while a
   row lock is held.
   Phase 2: settle_payment() locks the row briefly and applies the result.
+  Phase 3 (WEZA-51): only after a freshly applied success has been committed,
+  fulfil_payment() creates the session and asks the router for access. It
+  never changes the payment and never changes the reply to Safaricom.
 
 Fail closed: anything unparseable, unmatched, unverifiable or unconfirmed
 leaves the payment pending and grants nothing. Every path ends with the
@@ -14,6 +17,7 @@ audit event moved to a final outcome.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -32,9 +36,18 @@ from app.payments.settlement_plan import SettlementAction, requires_status_query
 from app.payments.statuses import PaymentStatus
 from app.services.payment_event_outcome import mark_event_outcome
 from app.services.payment_event_service import EventOutcome
+from app.services.payment_fulfilment import (
+    FulfilmentOutcome,
+    FulfilmentResult,
+    fulfil_payment,
+)
 from app.services.payment_settlement import settle_payment
 
 logger = logging.getLogger(__name__)
+
+# Signature of fulfil_payment. Injected so tests can fake it, in the same way
+# the Daraja client is injected below.
+Fulfiller = Callable[[Session, int], FulfilmentResult]
 
 
 class StatusQuerier(Protocol):
@@ -50,6 +63,9 @@ class CallbackProcessing:
     outcome: EventOutcome
     payment_id: int | None
     action: SettlementAction | None
+    # None unless this callback freshly applied a success. Added last with a
+    # default so existing positional constructions keep working.
+    fulfilment: FulfilmentOutcome | None = None
 
 
 def process_callback(
@@ -59,6 +75,7 @@ def process_callback(
     event_id: int,
     payload: object,
     raw_payload: dict[str, Any],
+    fulfil: Fulfiller = fulfil_payment,
 ) -> CallbackProcessing:
     """Handle one callback. `payload` is the parsed JSON (any shape: it is
     untrusted); `raw_payload` is the JSONB-safe copy stored for audit.
@@ -115,7 +132,18 @@ def process_callback(
         "callback processed: payment_id=%s checkout_request_id=%s verdict=%s action=%s",
         payment_id, callback.checkout_request_id, verdict.value, result.action.value,
     )
-    return CallbackProcessing(_outcome_for(result.action), payment_id, result.action)
+
+    # Only a freshly applied success starts fulfilment. settle_payment has
+    # committed, so no lock is held while the router is called. Duplicates
+    # (ALREADY_SETTLED) deliberately do NOT re-run it: activation retries must
+    # be deliberate (WEZA-63), not a side effect of Safaricom resending.
+    fulfilment: FulfilmentOutcome | None = None
+    if result.action is SettlementAction.APPLY_SUCCESS:
+        fulfilment = _fulfil_safely(db, fulfil, payment_id)
+
+    return CallbackProcessing(
+        _outcome_for(result.action), payment_id, result.action, fulfilment
+    )
 
 
 def _ask_status(
@@ -135,6 +163,20 @@ def _ask_status(
             payment_id, type(error).__name__,
         )
         return None
+
+
+def _fulfil_safely(db: Session, fulfil: Fulfiller, payment_id: int) -> FulfilmentOutcome:
+    """Run fulfilment and make sure nothing can escape.
+
+    fulfil_payment already catches its own errors, but its final rollback can
+    still raise if the database connection died. The payment is already
+    committed as successful, so the callback must still be answered normally.
+    """
+    try:
+        return fulfil(db, payment_id).outcome
+    except Exception:
+        logger.exception("fulfilment raised past its guard: payment_id=%s", payment_id)
+        return FulfilmentOutcome.UNEXPECTED_ERROR
 
 
 def _outcome_for(action: SettlementAction) -> EventOutcome:
