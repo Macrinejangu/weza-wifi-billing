@@ -20,8 +20,10 @@ from app.integrations.mpesa.errors import (
     DarajaTimeoutError,
     DarajaUnavailableError,
 )
+from app.api.auth import CUSTOMER_AUDIENCE
+from app.core.security import create_token
 from app.main import app
-from app.models import Payment
+from app.models import Payment, Purchase, User
 from app.services.purchase_service import create_purchase
 
 ACCEPTED = StkPushAccepted(checkout_request_id="ws_CO_1", merchant_request_id="m-1")
@@ -81,6 +83,14 @@ def fresh_client_cache():
     payments_route._build_daraja_client.cache_clear()
 
 
+@pytest.fixture
+def client(client, user, monkeypatch):
+    monkeypatch.setenv("JWT_SECRET", "payment-route-tests-only-secret-do-not-deploy")
+    token = create_token(user.id, audience=CUSTOMER_AUDIENCE)
+    client.headers["Authorization"] = f"Bearer {token}"
+    return client
+
+
 def post(client, purchase_id, phone="0712345678", **extra):
     return client.post(
         "/api/payments",
@@ -113,6 +123,48 @@ def test_disabled_payments_stop_before_building_daraja_client(
     assert payment_count(db) == 0
     assert post(client, purchase.id).status_code == 404
     assert payment_count(db) == 0
+
+
+def test_payment_requires_customer_login(client, fake, db, purchase):
+    del client.headers["Authorization"]
+    assert post(client, purchase.id).status_code == 401
+    assert fake.calls == []
+    assert payment_count(db) == 0
+
+
+def test_payment_hides_another_customers_purchase(client, fake, db, purchase):
+    other = User(email="other@example.test", full_name="Other Customer",
+                 role="customer", status="active", password_hash="x")
+    db.add(other)
+    db.flush()
+    token = create_token(other.id, audience=CUSTOMER_AUDIENCE)
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = post(client, purchase.id)
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "purchase_not_found"
+    assert fake.calls == []
+    assert payment_count(db) == 0
+
+
+def test_customer_checkout_uses_authenticated_owner_and_package_price(
+    client, db, user, package, monkeypatch,
+):
+    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
+    monkeypatch.setenv("ENABLE_DIRECT_HOTSPOT_CHECKOUT", "false")
+    url = "/api/customer/purchases"
+    headers = {"Idempotency-Key": "owned-checkout-test-1"}
+    data = {"package_id": package.id}
+    assert client.post(url, json={**data, "user_id": user.id}, headers=headers).status_code == 422
+
+    created = client.post(url, json=data, headers=headers)
+    assert created.status_code == 201
+    assert created.json()["amount"] == package.price
+    assert db.get(Purchase, created.json()["id"]).user_id == user.id
+    replay = client.post(url, json=data, headers=headers)
+    assert replay.status_code == 200
+    assert replay.json() == created.json()
 
 
 def test_accepted_payment_returns_201_and_a_pending_status(client, fake, purchase):
@@ -291,3 +343,48 @@ def test_the_daraja_client_is_built_once_and_reused(monkeypatch, fresh_client_ca
     assert isinstance(first, DarajaClient)
     assert first is second
     assert len(calls) == 1
+def test_customer_payment_status_returns_only_customer_fields(client, fake, db, purchase, monkeypatch):
+    payment_id = post(client, purchase.id).json()["payment_id"]
+    monkeypatch.setenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", "false")
+    url = f"/api/customer/payments/{payment_id}"
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json() == {
+        "id": payment_id,
+        "purchase_id": purchase.id,
+        "status": "pending",
+        "amount": purchase.amount,
+        "package_name": purchase.package_name,
+        "mpesa_receipt_number": None,
+    }
+
+    payment = db.get(Payment, payment_id)
+    payment.status = "successful"
+    payment.mpesa_receipt_number = "TESTRECEIPT"
+    db.flush()
+
+    assert client.get(url).json()["status"] == "successful"
+    assert client.get(url).json()["mpesa_receipt_number"] == "TESTRECEIPT"
+    assert len(fake.calls) == 1
+
+
+def test_customer_payment_status_rejects_anonymous_and_other_customers(client, fake, db, purchase):
+    payment_id = post(client, purchase.id).json()["payment_id"]
+    url = f"/api/customer/payments/{payment_id}"
+    del client.headers["Authorization"]
+    assert client.get(url).status_code == 401
+
+    other = User(email="other@example.test", full_name="Other Customer",
+                 role="customer", status="active", password_hash="x")
+    db.add(other)
+    db.flush()
+    token = create_token(other.id, audience=CUSTOMER_AUDIENCE)
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = client.get(url)
+    missing = client.get("/api/customer/payments/2147483647")
+    assert response.status_code == missing.status_code == 404
+    assert response.json() == missing.json()
+    assert len(fake.calls) == 1

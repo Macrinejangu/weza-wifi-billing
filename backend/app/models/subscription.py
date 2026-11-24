@@ -8,6 +8,7 @@ class Subscription(TimestampMixin, Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     package_id = Column(Integer, ForeignKey("packages.id"), nullable=False)
+    payment_id = Column(Integer, ForeignKey("payments.id"), unique=True)
     start_date = Column(DateTime(timezone=True), nullable=True)
     end_date = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(20), default="pending", nullable=False)

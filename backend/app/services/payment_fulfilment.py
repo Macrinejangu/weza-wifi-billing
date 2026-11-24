@@ -38,7 +38,7 @@ _SESSION_ACTIVATING = "ACTIVATING"
 class FulfilmentOutcome(StrEnum):
     """What happened when we tried to give a paid customer access."""
 
-    ACTIVATED = "activated"  # Router confirmed access; the timer has started
+    ACTIVATED = "activated"  # Router confirmed access
     ACTIVATION_FAILED = "activation_failed"  # Recorded as failed; staff can retry
     ACTIVATION_UNCONFIRMED = "activation_unconfirmed"  # Router may have applied it
     NOT_ATTEMPTED = "not_attempted"  # A precondition failed; no router call made
@@ -56,6 +56,8 @@ class FulfilmentResult:
 
 def _classify(session: WiFiSession) -> FulfilmentOutcome:
     """Read the outcome from the session that activate_session returned."""
+    if session.status == "EXPIRED":
+        return FulfilmentOutcome.NOT_ATTEMPTED
     if session.activation_status == ActivationStatus.SUCCEEDED:
         return FulfilmentOutcome.ACTIVATED
     if session.activation_status == ActivationStatus.FAILED:
@@ -83,7 +85,7 @@ def fulfil_payment(
     """
     session_id: int | None = None
     try:
-        session = create_session(db, payment_id)
+        session = create_session(db, payment_id, verified_checkout=True)
         session_id = session.id
         # Two simultaneous calls can both load the session as "not started"
         # here (a plain read is not blocked by the other call's row lock).

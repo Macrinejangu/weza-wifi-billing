@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
+import { getStaffSettings, StaffSessionError, updateStaffSettings } from '../api.js'
 import '../styles/system-settings.css'
 
 const sections = [
@@ -22,7 +23,10 @@ const staffTiers = [
   { name: 'System Administrator', accounts: 1, description: 'System preferences, integration configuration, and audit access.' },
 ]
 
-export default function SystemSettingsPage({ onOpenAuditHistory }) {
+export default function SystemSettingsPage({ accessToken, onSignOut, onOpenAuditHistory }) {
+  if (accessToken) {
+    return <LiveSystemSettings {...{ accessToken, onSignOut, onOpenAuditHistory }} />
+  }
   if (!demoDataEnabled) {
     return (
       <section className="system-settings-page">
@@ -139,6 +143,131 @@ function DemoSystemSettings({ onOpenAuditHistory }) {
           ))}
         </div>
       </section>
+    </form>
+  )
+}
+
+function editablePreferences(preferences) {
+  return {
+    name: preferences.name,
+    maintenance_start: preferences.maintenance_start?.slice(0, 5) ?? '',
+    maintenance_end: preferences.maintenance_end?.slice(0, 5) ?? '',
+  }
+}
+
+function LiveSystemSettings({ accessToken, onSignOut, onOpenAuditHistory }) {
+  const [settings, setSettings] = useState(null)
+  const [draft, setDraft] = useState(null)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getStaffSettings(accessToken, { signal: controller.signal }).then((result) => {
+      if (controller.signal.aborted) return
+      setSettings(result)
+      setDraft(editablePreferences(result.preferences))
+    }).catch((failure) => {
+      if (controller.signal.aborted) return
+      if (failure instanceof StaffSessionError) onSignOut()
+      else setError(failure.message)
+    })
+    return () => controller.abort()
+  }, [accessToken, attempt, onSignOut])
+
+  const canEdit = settings?.role === 'admin'
+  const saved = settings ? editablePreferences(settings.preferences) : null
+  const dirty = Boolean(saved && draft && Object.keys(saved).some((key) => draft[key] !== saved[key]))
+
+  function updateField(event) {
+    const { name, value } = event.target
+    setDraft((previous) => ({ ...previous, [name]: value }))
+    setNotice('')
+    setError('')
+  }
+
+  async function save(event) {
+    event.preventDefault()
+    if (!canEdit || !dirty || saving) return
+    const { name, maintenance_start: start, maintenance_end: end } = draft
+    if (!name.trim() || Boolean(start) !== Boolean(end) || (start && start === end)) {
+      setError('Enter a system name and either two different maintenance times or no times.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const preferences = await updateStaffSettings(accessToken, {
+        name: name.trim(),
+        maintenance_start: start || null,
+        maintenance_end: end || null,
+      })
+      setSettings((previous) => ({ ...previous, preferences }))
+      setDraft(editablePreferences(preferences))
+      setNotice('System preferences saved.')
+    } catch (failure) {
+      if (failure instanceof StaffSessionError) onSignOut()
+      else setError(failure.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form className="system-settings-page" onSubmit={save}>
+      <header className="page-heading system-settings-heading">
+        <div><h1>System Settings</h1><p>Console preferences, integration configuration, and staff access.</p></div>
+        {canEdit && <div className="system-settings-actions">
+          <button type="button" onClick={onOpenAuditHistory}>Audit History</button>
+          <button type="submit" className="system-settings-primary" disabled={!dirty || saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>}
+      </header>
+      {error && <p role="alert" className="system-settings-feedback">{error}</p>}
+      {notice && <p role="status" className="system-settings-feedback">{notice}</p>}
+      {!settings && (
+        error ? <button type="button" onClick={() => { setError(''); setAttempt(attempt + 1) }}>Try again</button>
+          : <p role="status">Loading system settings…</p>
+      )}
+      {settings && draft && <>
+        <section className="system-settings-panel" aria-label="General preferences">
+          <header><h2>General Preferences</h2><p>{canEdit ? 'Store the console name and maintenance window.' : 'An administrator manages these preferences.'}</p></header>
+          <div className="system-settings-grid">
+            <label className="system-settings-tile">
+              <span>System Name</span>
+              <input name="name" required maxLength={60} value={draft.name} onChange={updateField} readOnly={!canEdit || saving} />
+            </label>
+            <div className="system-settings-tile"><span>Timezone</span><strong>Africa/Nairobi (EAT)</strong></div>
+            <div className="system-settings-tile"><span>Currency</span><strong>Kenyan Shillings (KES)</strong></div>
+            <fieldset className="system-settings-tile system-maintenance" disabled={!canEdit || saving}>
+              <legend>Maintenance Window (EAT)</legend>
+              <label><small>Start</small><input type="time" name="maintenance_start" value={draft.maintenance_start} onChange={updateField} /></label>
+              <label><small>End</small><input type="time" name="maintenance_end" value={draft.maintenance_end} onChange={updateField} /></label>
+              <small>Saved schedule for staff reference.</small>
+            </fieldset>
+          </div>
+        </section>
+        <section className="system-settings-panel" aria-label="Integration configuration">
+          <header><h2>Integration Configuration</h2><p>Backend settings. Service health has not been checked.</p></header>
+          <div className="system-settings-grid">
+            <article className="system-settings-tile"><span>Safaricom Daraja sandbox</span><strong>{settings.daraja_sandbox_enabled ? 'Enabled' : 'Disabled'}</strong></article>
+            <article className="system-settings-tile"><span>Mock payments</span><strong>{settings.mock_payments_enabled ? 'Enabled' : 'Disabled'}</strong></article>
+            <article className="system-settings-tile"><span>Router Mode</span><strong>{{ mock: 'Mock', mikrotik: 'MikroTik' }[settings.router_mode] ?? 'Unconfigured'}</strong></article>
+            <article className="system-settings-tile"><span>SMS Notifications</span><strong>Unavailable</strong></article>
+          </div>
+        </section>
+        <section className="system-settings-panel" aria-label="Staff access">
+          <header><h2>Staff Access &amp; Operator Roles</h2><p>Signed in as {canEdit ? 'Administrator' : 'Operator'}.</p></header>
+          <div className="system-settings-grid">
+            <article className="system-settings-tile"><span>Administrators</span><strong>{settings.active_staff_by_role.admin} active</strong><p>Manage system preferences and review audit history.</p></article>
+            <article className="system-settings-tile"><span>Operators</span><strong>{settings.active_staff_by_role.operator} active</strong><p>Review billing, sessions, and system configuration.</p></article>
+          </div>
+        </section>
+      </>}
     </form>
   )
 }

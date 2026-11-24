@@ -30,18 +30,18 @@ from app.integrations.mpesa.callback_payload import (
 )
 from app.integrations.mpesa.errors import DarajaError
 from app.integrations.mpesa.stk_query import StkQueryOutcome, StkQueryResult
-from app.models import Payment
+from app.models import Payment, PaymentEvent
 from app.payments.callback_verification import ExpectedPayment, verify_callback
 from app.payments.settlement_plan import SettlementAction, requires_status_query
 from app.payments.statuses import PaymentStatus
 from app.services.payment_event_outcome import mark_event_outcome
-from app.services.payment_event_service import EventOutcome
+from app.services.payment_event_service import EventOutcome, EventSource, record_received_event
 from app.services.payment_fulfilment import (
     FulfilmentOutcome,
     FulfilmentResult,
     fulfil_payment,
 )
-from app.services.payment_settlement import settle_payment
+from app.services.payment_settlement import UNCONFIRMED_QUERY_NOTE, settle_payment
 
 logger = logging.getLogger(__name__)
 
@@ -197,3 +197,37 @@ def _close_event(
     except Exception:
         db.rollback()
         raise
+
+
+def replay_callback(db: Session, daraja: StatusQuerier, event_id: int) -> CallbackProcessing:
+    """Retry a stored callback using the same verification and settlement rules."""
+    event = db.get(PaymentEvent, event_id)
+    if event is None:
+        raise LookupError("Callback audit event not found")
+
+    retryable = (
+        event.processing_status in (EventOutcome.RECEIVED, EventOutcome.UNMATCHED)
+        or (
+            event.processing_status == EventOutcome.REJECTED
+            and event.error_message == UNCONFIRMED_QUERY_NOTE
+        )
+    )
+    if event.source != EventSource.CALLBACK or not retryable:
+        raise ValueError("This audit event is not eligible for replay")
+
+    payload = event.payload
+    try:
+        callback = parse_stk_callback(payload)
+    except MalformedCallbackError:
+        raise ValueError("The stored event does not contain a replayable callback") from None
+
+    replay_id = record_received_event(
+        db,
+        source=EventSource.QUERY,
+        payload={**payload, "replay_of_event_id": event_id},
+        checkout_request_id=callback.checkout_request_id,
+        result_code=callback.result_code,
+    )
+    return process_callback(
+        db, daraja, event_id=replay_id, payload=payload, raw_payload=payload,
+    )

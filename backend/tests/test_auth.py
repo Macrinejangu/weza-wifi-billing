@@ -1,8 +1,13 @@
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.core.security import create_token, hash_password
-from app.models import User
+from app.api import staff as staff_api
+from app.models import AccessPoint, ActivationAttempt, Router, User, WiFiSession
+
+from test_payment_settlement import make_payment, make_purchase
 
 PASSWORD = "correct-horse-battery"
 
@@ -161,3 +166,261 @@ def test_session_detail_and_activation_are_staff_only(client, db):
     for send, path in [(client.get, "/api/sessions/1"), (client.post, "/api/sessions/1/activate")]:
         assert send(path).status_code == 401
         assert send(path, headers=headers).status_code == 403
+
+
+
+def test_customer_directory_is_staff_only(client, db):
+    customer = add_user(db, role="customer", email="customer@weza.local")
+    suspended_staff = add_user(db, status="suspended")
+
+    assert client.get("/api/customers").status_code == 401
+    customer_headers = {"Authorization": f"Bearer {create_token(customer.id)}"}
+    suspended_headers = {"Authorization": f"Bearer {create_token(suspended_staff.id)}"}
+    assert client.get("/api/customers", headers=customer_headers).status_code == 403
+    assert client.get("/api/customers", headers=suspended_headers).status_code == 401
+
+
+def test_customer_directory_returns_minimal_customer_fields(client, db):
+    staff = add_user(db)
+    customer = add_user(db, role="customer", email="customer@weza.local")
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+
+    response = client.get("/api/customers", headers=headers)
+    assert response.status_code == 200
+    rows = response.json()
+    assert [row["id"] for row in rows] == [customer.id]
+    assert set(rows[0]) == {"id", "full_name", "phone", "status", "created_at"}
+    assert rows[0]["phone"] is None
+
+
+def test_customer_directory_applies_search_status_and_pagination(client, db):
+    staff = add_user(db)
+    first = add_user(db, role="customer", email="first@weza.local")
+    second = add_user(db, role="customer", status="inactive", email="second@weza.local")
+    first.full_name = "Audit Customer"
+    first.phone = "+254700000001"
+    db.commit()
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+
+    def ids(**params):
+        response = client.get("/api/customers", headers=headers, params=params)
+        assert response.status_code == 200
+        return [row["id"] for row in response.json()]
+
+    assert ids(limit=1) == [second.id]
+    assert ids(limit=1, offset=1) == [first.id]
+    assert ids(status="inactive") == [second.id]
+    assert ids(q="audit") == [first.id]
+    assert ids(q="700000001") == [first.id]
+    assert ids(q=str(first.id)) == [first.id]
+    assert ids(q="%") == []
+    assert client.get("/api/customers?limit=101", headers=headers).status_code == 422
+
+
+
+def test_overview_requires_active_staff(client, db):
+    customer = add_user(db, role="customer")
+    suspended = add_user(db, status="suspended", email="suspended@weza.local")
+    assert client.get("/api/overview").status_code == 401
+    assert client.get("/api/overview", headers={"Authorization": f"Bearer {create_token(customer.id)}"}).status_code == 403
+    assert client.get("/api/overview", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
+
+
+def test_overview_counts_sandbox_receipts_and_current_session_states(client, db, user, package, monkeypatch):
+    staff = add_user(db)
+    now = datetime(2026, 11, 23, 4, tzinfo=UTC)
+    midnight = datetime(2026, 11, 22, 21, tzinfo=UTC)
+    provider = {"Body": {"stkCallback": {"ResultCode": 0}}}
+    original_overview = staff_api.read_overview
+    monkeypatch.setattr(staff_api, "read_overview", lambda session, _: original_overview(session, now))
+
+    def add_payment(key, *, status="successful", paid_at=None, raw_callback=None):
+        purchase = make_purchase(db, user, package, key=key)
+        payment = make_payment(
+            db, purchase, checkout=key, status=status,
+            receipt=f"receipt-{key}" if status == "successful" else None,
+        )
+        payment.paid_at = paid_at
+        payment.raw_callback = raw_callback
+        db.commit()
+        return payment
+
+    active_payment = add_payment("today-provider", paid_at=midnight, raw_callback=provider)
+    expired_payment = add_payment("yesterday-provider", paid_at=midnight - timedelta(seconds=1), raw_callback=provider)
+    failed_payment = add_payment("today-mock", paid_at=now, raw_callback={"mock": True})
+    ended_payment = add_payment("today-ended", paid_at=now)
+    add_payment("pending", status="pending")
+    add_payment("failed", status="failed")
+
+    def add_session(payment, status, activation, *, expires=None, ended=None):
+        db.add(WiFiSession(
+            payment_id=payment.id, user_id=user.id, package_id=package.id,
+            status=status, activation_status=activation,
+            started_at=now - timedelta(hours=1) if expires else None,
+            expires_at=expires, ended_at=ended,
+        ))
+
+    add_session(active_payment, "ACTIVE", "succeeded", expires=now + timedelta(hours=1))
+    add_session(expired_payment, "ACTIVE", "succeeded", expires=now)
+    add_session(ended_payment, "ACTIVE", "succeeded", expires=now + timedelta(hours=1), ended=now)
+    add_session(failed_payment, "FAILED", "failed")
+    db.commit()
+
+    response = client.get("/api/overview", headers={"Authorization": f"Bearer {create_token(staff.id)}"})
+    assert response.status_code == 200
+    assert response.json() == {
+        "sandbox_settled_today_kes": active_payment.amount,
+        "sandbox_settled_today_count": 1,
+        "active_session_records": 1,
+        "pending_payments": 1,
+        "failed_activations": 1,
+    }
+
+
+def test_network_inventory_is_staff_only(client, db):
+    customer = add_user(db, role="customer", email="inventory-customer@weza.local")
+    suspended = add_user(db, status="suspended", email="inventory-suspended@weza.local")
+
+    assert client.get("/api/network/devices").status_code == 401
+    assert client.get("/api/network/devices", headers={"Authorization": f"Bearer {create_token(customer.id)}"}).status_code == 403
+    assert client.get("/api/network/devices", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
+
+
+def test_staff_network_inventory_returns_saved_records_and_empty_lists(client, db):
+    staff = add_user(db)
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+    empty = client.get("/api/network/devices", headers=headers)
+    assert empty.status_code == 200
+    assert empty.json() == {"routers": [], "access_points": []}
+
+    router = Router(name="Audit Router", identity="audit-router", host="192.0.2.10", status="online")
+    db.add(router)
+    db.flush()
+    seen = datetime(2026, 11, 23, 8, tzinfo=UTC)
+    point = AccessPoint(
+        router_id=router.id, name="Audit Access Point", location="Test Lab",
+        mac_address="02:00:00:00:00:01", status="offline", last_seen_at=seen,
+    )
+    db.add(point)
+    db.commit()
+
+    response = client.get("/api/network/devices", headers=headers)
+    assert response.status_code == 200
+    inventory = response.json()
+    assert inventory["routers"] == [{
+        "id": router.id, "name": "Audit Router", "identity": "audit-router", "status": "online",
+    }]
+    [record] = inventory["access_points"]
+    assert record == {
+        "id": point.id, "name": "Audit Access Point", "router_id": router.id,
+        "location": "Test Lab", "mac_address": "02:00:00:00:00:01", "status": "offline",
+        "last_seen_at": record["last_seen_at"],
+    }
+    assert datetime.fromisoformat(record["last_seen_at"]) == seen
+
+
+def test_connection_issues_require_active_staff(client, db):
+    customer = add_user(db, role="customer", email="issues-customer@weza.local")
+    suspended = add_user(db, status="suspended", email="issues-suspended@weza.local")
+
+    assert client.get("/api/connection-issues").status_code == 401
+    assert client.get("/api/connection-issues", headers={"Authorization": f"Bearer {create_token(customer.id)}"}).status_code == 403
+    assert client.get("/api/connection-issues", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
+
+
+def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostics(client, db, user, package):
+    staff = add_user(db)
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+    assert client.get("/api/connection-issues", headers=headers).json() == []
+
+    def create_session(key, payment_status, activation_status, session_status):
+        purchase = make_purchase(db, user, package, key=key)
+        payment = make_payment(
+            db, purchase, checkout=key, status=payment_status,
+            receipt=f"receipt-{key}" if payment_status == "successful" else None,
+        )
+        session = WiFiSession(
+            payment_id=payment.id, user_id=user.id, package_id=package.id,
+            status=session_status, activation_status=activation_status,
+            failure_reason="internal diagnostic text",
+        )
+        db.add(session)
+        db.commit()
+        return payment, session
+
+    payment, failed = create_session("paid-failed", "successful", "failed", "FAILED")
+    create_session("unpaid-failed", "pending", "failed", "FAILED")
+    create_session("paid-waiting", "successful", "waiting", "ACTIVATING")
+    db.add_all([
+        ActivationAttempt(session_id=failed.id, attempt_number=1, status="failed", error_code="RouterActivationError"),
+        ActivationAttempt(session_id=failed.id, attempt_number=2, status="failed", error_code="TimeoutError", error_message="internal diagnostic text"),
+    ])
+    db.commit()
+
+    response = client.get("/api/connection-issues", headers=headers)
+    assert response.status_code == 200
+    [issue] = response.json()
+    assert issue["session_id"] == failed.id
+    assert issue["customer_id"] == user.id
+    assert issue["payment_id"] == payment.id
+    assert issue["payment_reference"] == "receipt-paid-failed"
+    assert issue["payment_status"] == "successful"
+    assert issue["activation_status"] == "failed"
+    assert issue["failure_reason"] == "The activation request timed out."
+    assert "internal diagnostic text" not in response.text
+    assert client.get("/api/connection-issues?offset=1", headers=headers).json() == []
+
+
+def test_customer_login_reads_only_its_own_profile(client, db):
+    customer = add_user(db, role="customer", email="pilot-customer@weza.local")
+    customer.full_name = "Pilot Customer"
+    customer.phone = "+254700000001"
+    db.commit()
+
+    login_response = client.post("/api/auth/customer/login", json={
+        "email": " PILOT-CUSTOMER@weza.local ", "password": PASSWORD,
+    })
+    assert login_response.status_code == 200
+    headers = {"Authorization": f"Bearer {login_response.json()['access_token']}"}
+    assert client.get("/api/auth/customer/me", headers=headers).json() == {
+        "id": customer.id, "full_name": "Pilot Customer",
+        "email": "pilot-customer@weza.local", "phone": "+254700000001",
+    }
+
+    customer.status = "suspended"
+    db.commit()
+    assert client.get("/api/auth/customer/me", headers=headers).status_code == 401
+
+
+def test_customer_login_rejects_ineligible_accounts_with_the_same_error(client, db):
+    add_user(db)
+    add_user(db, role="customer", email="customer@weza.local")
+    add_user(db, role="customer", status="suspended", email="suspended@weza.local")
+    for email, password in [
+        ("staff@weza.local", PASSWORD), ("customer@weza.local", "wrong"),
+        ("suspended@weza.local", PASSWORD), ("missing@weza.local", PASSWORD),
+    ]:
+        response = client.post("/api/auth/customer/login", json={"email": email, "password": password})
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Invalid email or password"}
+
+
+def test_customer_and_staff_tokens_are_not_interchangeable(client, db):
+    add_user(db)
+    customer = add_user(db, role="customer", email="customer@weza.local")
+    staff_token = login(client).json()["access_token"]
+    customer_response = client.post("/api/auth/customer/login", json={
+        "email": "customer@weza.local", "password": PASSWORD,
+    })
+    assert customer_response.status_code == 200
+    customer_headers = {"Authorization": f"Bearer {customer_response.json()['access_token']}"}
+
+    assert client.get("/api/auth/customer/me").status_code == 401
+    assert client.get("/api/auth/customer/me", headers={"Authorization": f"Bearer {staff_token}"}).status_code == 401
+    assert client.get("/api/auth/me", headers=customer_headers).status_code == 401
+    assert client.get("/api/payments", headers=customer_headers).status_code == 401
+
+    customer.role = "operator"
+    db.commit()
+    assert client.get("/api/auth/customer/me", headers=customer_headers).status_code == 401
+    assert client.get("/api/auth/me", headers=customer_headers).status_code == 401

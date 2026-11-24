@@ -10,13 +10,15 @@ thread is guaranteed to arrive while the first is still inside the router.
 (A barrier inside the router would deadlock: the second thread is blocked
 on the lock and could never reach it.)
 
-Rows are really committed, so they are deleted afterwards, children first.
+Rows are really committed, so they are deleted afterwards, children first
+(attempts, sessions, subscriptions, payment, purchase, package, user).
 """
 
 import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
@@ -29,6 +31,7 @@ from app.models import (
     Package,
     Payment,
     Purchase,
+    Subscription,
     User,
     WiFiSession,
 )
@@ -80,6 +83,10 @@ def confirmed(engine):
                                  status="paid")
         payment = make_payment(setup, purchase, checkout=f"ws_CO_fulfil_{suffix}",
                                status="successful", receipt=f"F{suffix.upper()}")
+        # Settlement sets paid_at for real payments, and create_session
+        # refuses a payment without it.
+        payment.paid_at = datetime.now(timezone.utc)
+        setup.commit()
         ids = {
             "user": user.id,
             "package": package.id,
@@ -89,7 +96,8 @@ def confirmed(engine):
 
     yield ids
 
-    # Children before parents (foreign keys).
+    # Children before parents (foreign keys). Sessions point at subscriptions,
+    # so sessions go first.
     with Session(engine) as cleanup:
         cleanup.execute(delete(ActivationAttempt).where(
             ActivationAttempt.session_id.in_(
@@ -100,6 +108,9 @@ def confirmed(engine):
         ))
         cleanup.execute(delete(WiFiSession).where(
             WiFiSession.payment_id == ids["payment"]
+        ))
+        cleanup.execute(delete(Subscription).where(
+            Subscription.payment_id == ids["payment"]
         ))
         cleanup.execute(delete(Payment).where(Payment.id == ids["payment"]))
         cleanup.execute(delete(Purchase).where(Purchase.id == ids["purchase"]))

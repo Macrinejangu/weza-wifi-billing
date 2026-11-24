@@ -45,13 +45,33 @@ async function apiRequest(endpoint, options = {}) {
   return data
 }
 
-export function startMpesaPayment({ purchaseId, phoneNumber }) {
+export function createCustomerPurchase({ accessToken, packageId, idempotencyKey }) {
+  return apiRequest('/api/customer/purchases', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ package_id: packageId }),
+  })
+}
+
+export function startMpesaPayment({ accessToken, purchaseId, phoneNumber }) {
   return apiRequest('/api/payments', {
     method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({
       purchase_id: purchaseId,
       phone_number: phoneNumber,
     }),
+  })
+}
+
+export function getCustomerPayment({ accessToken, paymentId, signal }) {
+  return apiRequest(`/api/customer/payments/${paymentId}`, {
+    cache: 'no-store',
+    signal,
+    headers: { Authorization: `Bearer ${accessToken}` },
   })
 }
 
@@ -61,4 +81,20 @@ export function getConnectionStatus() {
 
 export function getMySubscription() {
   return apiRequest('/api/subscriptions/me')
+}
+
+
+export function loginCustomer({ email, password }) {
+  return apiRequest('/api/auth/customer/login', {
+    method: 'POST',
+    cache: 'no-store',
+    body: JSON.stringify({ email: email.trim(), password }),
+  })
+}
+
+export function getCustomerProfile(accessToken) {
+  return apiRequest('/api/auth/customer/me', {
+    cache: 'no-store',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
 }

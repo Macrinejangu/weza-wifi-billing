@@ -7,6 +7,8 @@ payment status and activation status stay separate: a router problem must
 never change a payment that M-Pesa confirmed.
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from app.models import ActivationAttempt, Payment, WiFiSession
@@ -34,12 +36,18 @@ class FakeRouter:
 
 def make_paid(db, user, package, *, successful=True):
     purchase = make_purchase(db, user, package, status="paid" if successful else "pending")
-    return make_payment(
+    payment = make_payment(
         db,
         purchase,
         status="successful" if successful else "pending",
         receipt="QGH1234ABC" if successful else None,
     )
+    if successful:
+        # Settlement sets paid_at for real payments, and create_session
+        # refuses a payment without it.
+        payment.paid_at = datetime.now(timezone.utc)
+        db.flush()
+    return payment
 
 
 def session_count(db):
@@ -118,4 +126,3 @@ def test_unconfirmed_payment_gets_no_session_and_no_router_call(
     assert result.session_id is None
     assert session_count(db) == 0
     assert router.calls == []
-    

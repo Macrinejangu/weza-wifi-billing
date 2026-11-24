@@ -42,7 +42,9 @@ def make_session(status: str, activation_status: str) -> SimpleNamespace:
 
 
 def patch_services(monkeypatch, create, activate) -> None:
-    monkeypatch.setattr(payment_fulfilment, "create_session", create)
+    monkeypatch.setattr(
+        payment_fulfilment, "create_session", lambda db, payment_id, *, verified_checkout: create(db, payment_id)
+    )
     monkeypatch.setattr(payment_fulfilment, "activate_session", activate)
 
 

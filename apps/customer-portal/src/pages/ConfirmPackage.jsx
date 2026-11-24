@@ -2,13 +2,12 @@ import { ArrowLeft, ArrowRight, Smartphone, Wifi } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
-import { startMpesaPayment } from '../services/api.js'
+import { createCustomerPurchase, startMpesaPayment } from '../services/api.js'
 
 const sandboxEnabled =
   import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
 
 const sandboxPackageId = Number(import.meta.env.VITE_SANDBOX_PACKAGE_ID)
-const sandboxPurchaseId = Number(import.meta.env.VITE_SANDBOX_PURCHASE_ID)
 const kenyanMobile = /^(?:\+?254|0)([17][0-9]{8})$/
 
 const retryableErrors = {
@@ -53,20 +52,19 @@ function paymentErrorFeedback(error) {
   }
 }
 
-export default function ConfirmPackage() {
-  const { state } = useLocation()
+export default function ConfirmPackage({ accessToken }) {
+  const { state, key: checkoutKey } = useLocation()
   const selectedPackage = state?.selectedPackage
   const [feedback, setFeedback] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const requestInProgress = useRef(false)
+  const purchaseRequest = useRef(null)
 
   const isSandboxCheckout =
     sandboxEnabled &&
-    selectedPackage?.id === sandboxPackageId &&
-    Number.isSafeInteger(sandboxPurchaseId) &&
-    sandboxPurchaseId > 0
+    selectedPackage?.id === sandboxPackageId
 
-  const showForm = Boolean(selectedPackage && (demoDataEnabled || isSandboxCheckout))
+  const showForm = Boolean(selectedPackage && (demoDataEnabled || (isSandboxCheckout && accessToken)))
   const isSandboxSubmission = isSandboxCheckout && !demoDataEnabled
   const paymentLocked = feedback?.kind === 'pending' || feedback?.kind === 'blocked'
   const isPhoneError = feedback?.kind === 'phone-error'
@@ -100,13 +98,34 @@ export default function ConfirmPackage() {
     setIsSubmitting(true)
     setFeedback(null)
 
+    let purchase
     try {
+      if (purchaseRequest.current?.checkoutKey !== checkoutKey ||
+          purchaseRequest.current?.accessToken !== accessToken) {
+        purchaseRequest.current = { checkoutKey, accessToken, key: crypto.randomUUID() }
+      }
+
+      purchase = await createCustomerPurchase({
+        accessToken,
+        packageId: selectedPackage.id,
+        idempotencyKey: purchaseRequest.current.key,
+      })
+      if (!Number.isSafeInteger(purchase?.id) || purchase.id <= 0) {
+        setFeedback({ kind: 'error', text: 'Could not confirm the purchase. Please try again.' })
+        return
+      }
+      if (purchase.amount !== selectedPackage.price) {
+        setFeedback({ kind: 'blocked', text: 'The package price changed. Go back to packages and review the current price.' })
+        return
+      }
+
       const payment = await startMpesaPayment({
-        purchaseId: sandboxPurchaseId,
+        accessToken,
+        purchaseId: purchase.id,
         phoneNumber: `254${match[1]}`,
       })
 
-      if (payment?.status !== 'pending' || payment.purchase_id !== sandboxPurchaseId) {
+      if (payment?.status !== 'pending' || payment.purchase_id !== purchase.id) {
         setFeedback(paymentErrorFeedback({}))
         return
       }
@@ -117,7 +136,13 @@ export default function ConfirmPackage() {
         paymentId: payment.payment_id,
       })
     } catch (error) {
-      setFeedback(paymentErrorFeedback(error))
+      if (error.status === 401) {
+        setFeedback({ kind: 'blocked', text: 'Your session expired. Sign in again to continue.' })
+      } else if (!purchase) {
+        setFeedback({ kind: 'error', text: 'Could not confirm the purchase. Check the package or try again.' })
+      } else {
+        setFeedback(paymentErrorFeedback(error))
+      }
     } finally {
       requestInProgress.current = false
       setIsSubmitting(false)
@@ -177,7 +202,9 @@ export default function ConfirmPackage() {
 
           {!showForm && (
             <p role="status" className="mt-4 text-sm text-[#655f75]">
-              Live checkout is currently unavailable.
+              {isSandboxCheckout && !accessToken ? (
+                <>Sign in to continue. <Link to="/login" className="underline">Sign in</Link></>
+              ) : 'Live checkout is currently unavailable.'}
             </p>
           )}
 
@@ -228,7 +255,12 @@ export default function ConfirmPackage() {
                   className={isAlert ? 'mt-3 text-sm text-red-700' : 'mt-3 text-sm text-[#585172]'}
                 >
                   {feedback.text}
-                  {feedback.paymentId && <> Payment reference: {feedback.paymentId}.</>}
+                  {Number.isSafeInteger(feedback.paymentId) && feedback.paymentId > 0 && (
+                    <> Payment reference: {feedback.paymentId}.{' '}
+                    <Link to={`/payment-status?payment=${feedback.paymentId}`} className="underline">
+                      Check payment status
+                    </Link></>
+                  )}
                   {feedback.kind === 'blocked' && (
                     <> <Link to="/support" className="underline">Get support</Link></>
                   )}

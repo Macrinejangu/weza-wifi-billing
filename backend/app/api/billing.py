@@ -1,12 +1,16 @@
 import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.auth import current_customer
 from app.core.security import create_device_reference, read_device_reference
 from app.db.session import get_db
+from app.models import Payment, Purchase, User
 from app.schemas.billing import (
-    CheckoutIn, DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
+    CheckoutIn, CustomerCheckoutIn, CustomerPaymentRead, CustomerPurchaseIn,
+    DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
 )
 from app.services.device_identity import (
     checkout_device_verification_enabled, resolve_hotspot_device, validate_client_ip,
@@ -17,6 +21,7 @@ from app.services.purchase_service import create_purchase
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Purchases and Payments"])
+customer_router = APIRouter(prefix="/api/customer", tags=["Customer checkout"])
 
 
 def direct_client_ip(request: Request) -> str:
@@ -85,6 +90,59 @@ def new_purchase(
     )
     response.status_code = 201 if created else 200  # repeated key: same purchase back
     return purchase
+
+
+@customer_router.post("/checkout/device-reference", response_model=DeviceReferenceOut)
+def issue_customer_device_reference(
+    data: CustomerCheckoutIn, request: Request, response: Response,
+    customer: User = Depends(current_customer),
+    idempotency_key: str = Header(min_length=8, max_length=100),
+):
+    return issue_device_reference(
+        CheckoutIn(user_id=customer.id, package_id=data.package_id),
+        request, response, idempotency_key,
+    )
+
+
+@customer_router.post("/purchases", response_model=PurchaseOut, status_code=201)
+def new_customer_purchase(
+    data: CustomerPurchaseIn, request: Request, response: Response,
+    customer: User = Depends(current_customer),
+    db: Session = Depends(get_db),
+    idempotency_key: str = Header(min_length=8, max_length=100),
+):
+    return new_purchase(
+        PurchaseIn(user_id=customer.id, **data.model_dump()),
+        request, response, db, idempotency_key,
+    )
+
+
+@customer_router.get("/payments/{payment_id}", response_model=CustomerPaymentRead)
+def get_customer_payment(
+    payment_id: int, response: Response,
+    customer: User = Depends(current_customer),
+    db: Session = Depends(get_db),
+):
+    row = db.execute(
+        select(Payment, Purchase.package_name)
+        .join(Purchase, Payment.purchase_id == Purchase.id)
+        .where(Payment.id == payment_id, Purchase.user_id == customer.id)
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(404, "Payment not found")
+
+    payment, package_name = row
+    response.headers["Cache-Control"] = "no-store"
+    return CustomerPaymentRead(
+        id=payment.id,
+        purchase_id=payment.purchase_id,
+        status=payment.status,
+        amount=payment.amount,
+        package_name=package_name,
+        mpesa_receipt_number=(
+            payment.mpesa_receipt_number if payment.status == "successful" else None
+        ),
+    )
 
 
 @router.post("/payments/mock", response_model=PaymentOut)

@@ -5,14 +5,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.auth import router as auth_router
+from app.api.billing import customer_router
 from app.api.billing import router as billing_router
 from app.api.health import router as health_router
 from app.api.mock_mode import require_mock_mode
 from app.api.packages import router as packages_router
 from app.api.router import router as router_status_router
 from app.api.sessions import router as sessions_router
+from app.api.routes.settings import router as settings_router
 from app.api.staff import router as staff_router
 
+from app.api.routes.customers import router as customers_router
+from app.api.routes.issues import router as connection_issues_router
+from app.api.routes.network import router as network_inventory_router
 from app.api.routes.payments import router as mpesa_payments_router
 from app.api.routes.mpesa_callback import router as mpesa_callback_router
 
@@ -30,7 +35,12 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(staff_router)
+app.include_router(settings_router)
+app.include_router(customers_router)
+app.include_router(connection_issues_router)
+app.include_router(network_inventory_router)
 app.include_router(mpesa_payments_router)
+app.include_router(customer_router)
 app.include_router(mpesa_callback_router)
 app.include_router(router_status_router)
 app.include_router(packages_router, prefix="/api")

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { getStaffProfile, signInStaff } from './api.js'
 import DashboardLayout from './layouts/DashboardLayout.jsx'
 import DashboardPage from './pages/DashboardPage.jsx'
 import CustomersPage, { initialCustomers } from './pages/CustomersPage.jsx'
@@ -15,7 +16,42 @@ import LoginPage from './pages/LoginPage.jsx'
 import { demoDataEnabled } from '../../shared/demoMode.js'
 import { developmentOperator } from './operatorIdentity.js'
 
+function getTokenExpiry(accessToken) {
+  try {
+    const payload = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const { exp } = JSON.parse(atob(payload))
+    return Number.isFinite(exp) ? exp * 1000 : 0
+  } catch {
+    return 0
+  }
+}
+
 export default function App() {
+  const [staffSession, setStaffSession] = useState(null)
+  const [staffPage, setStaffPage] = useState('payments')
+  const expiresAt = staffSession?.expiresAt
+  const signOut = useCallback(() => setStaffSession(null), [])
+
+  useEffect(() => {
+    if (!expiresAt) return undefined
+
+    const timeout = window.setTimeout(signOut, Math.max(0, expiresAt - Date.now()))
+    return () => window.clearTimeout(timeout)
+  }, [expiresAt, signOut])
+
+  async function handleSignIn(email, password) {
+    const accessToken = await signInStaff(email, password)
+    const staff = await getStaffProfile(accessToken)
+    const expiry = getTokenExpiry(accessToken)
+
+    if (expiry <= Date.now()) {
+      throw new Error('Your staff session is unavailable. Please sign in again.')
+    }
+
+    setStaffPage('payments')
+    setStaffSession({ accessToken, staff, expiresAt: expiry })
+  }
+
   // This preview is for frontend review only; it does not create an authenticated session.
   const [showDashboardPreview, setShowDashboardPreview] = useState(false)
   const [activePage, setActivePage] = useState('overview')
@@ -53,6 +89,56 @@ export default function App() {
   function closePreview() {
     navigate('overview')
     setShowDashboardPreview(false)
+  }
+
+  if (staffSession) {
+    const { staff, accessToken } = staffSession
+    const names = staff.full_name.trim().split(/\s+/)
+    const operator = {
+      fullName: staff.full_name,
+      displayName: names[0],
+      initials: names.slice(0, 2).map((name) => name.charAt(0)).join('').toUpperCase(),
+      role: staff.role === 'admin' ? 'Administrator' : 'Operator',
+    }
+
+    return (
+      <DashboardLayout operator={operator} activePage={staffPage === 'audit-history' ? 'settings' : staffPage} onNavigate={setStaffPage} onSignOut={signOut}>
+        {staffPage === 'overview' ? (
+          <DashboardPage
+            operator={operator}
+            accessToken={accessToken}
+            onSignOut={signOut}
+            onOpenIssues={() => setStaffPage('connection-issues')}
+          />
+        ) : staffPage === 'sessions' ? (
+          <SessionsPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'packages' ? (
+          <PackagesPage live />
+        ) : staffPage === 'customers' ? (
+          <CustomersPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'network-devices' ? (
+          <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'connection-issues' ? (
+          <ConnectionIssuesPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'settings' ? (
+          <SystemSettingsPage
+            accessToken={accessToken}
+            onSignOut={signOut}
+            onOpenAuditHistory={() => setStaffPage('audit-history')}
+          />
+        ) : staffPage === 'audit-history' ? (
+          <ActivityHistoryPage
+            accessToken={accessToken}
+            onSignOut={signOut}
+            onBack={() => setStaffPage('settings')}
+          />
+        ) : staffPage === 'staff-profile' ? (
+          <StaffProfilePage operator={operator} staff={staff} onSignOut={signOut} />
+        ) : (
+          <PaymentsPage accessToken={accessToken} onSignOut={signOut} />
+        )}
+      </DashboardLayout>
+    )
   }
 
   if (demoDataEnabled && showDashboardPreview) {
@@ -105,6 +191,7 @@ export default function App() {
 
   return (
     <LoginPage
+      onSignIn={handleSignIn}
       operator={demoDataEnabled ? developmentOperator : undefined}
       onPreviewDashboard={() => setShowDashboardPreview(true)}
     />

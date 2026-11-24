@@ -7,15 +7,13 @@ two separate database connections at the same instant.
 A barrier inside the fake status query makes the race certain: both threads
 have read the payment as 'pending' in phase 1 before either one settles.
 Only the SELECT ... FOR UPDATE in settle_payment can then prevent a double
-apply.
-
-Fulfilment is replaced with a fake: this test is about settlement, and the
-real fulfilment would create session rows and call the router (tested
-elsewhere). The fake also lets us assert that fulfilment starts exactly once.
+apply. Fulfilment is the real one: after the race there must be exactly one
+subscription, one session linked to it, and one succeeded attempt.
 
 The rows are deleted afterwards because they were really committed. Cleanup
-removes children before parents (foreign keys), including any session rows,
-so a failure here can never leave data that breaks other tests.
+removes children before parents (foreign keys), including session,
+attempt and subscription rows, so a failure here can never leave data that
+breaks other tests.
 """
 
 import os
@@ -34,12 +32,12 @@ from app.models import (
     Payment,
     PaymentEvent,
     Purchase,
+    Subscription,
     User,
     WiFiSession,
 )
 from app.services.callback_processing import process_callback
 from app.services.payment_event_service import EventSource, record_received_event
-from app.services.payment_fulfilment import FulfilmentOutcome, FulfilmentResult
 
 from test_callback_processing import PAID, FakeDaraja, body
 from test_payment_settlement import make_payment, make_purchase
@@ -60,26 +58,6 @@ class BarrierDaraja(FakeDaraja):
         # both threads can arrive. A timeout fails the test, never hangs it.
         self.barrier.wait(timeout=BARRIER_TIMEOUT_SECONDS)
         return super().stk_query(checkout_request_id, timestamp)
-
-
-class FakeFulfil:
-    """Stands in for fulfil_payment: records calls, touches no router or session.
-
-    The lock matters because two threads may call this at the same time.
-    """
-
-    def __init__(self):
-        self.calls = []
-        self._lock = threading.Lock()
-
-    def __call__(self, db, payment_id):
-        with self._lock:
-            self.calls.append(payment_id)
-        return FulfilmentResult(
-            payment_id=payment_id,
-            session_id=None,
-            outcome=FulfilmentOutcome.ACTIVATED,
-        )
 
 
 @pytest.fixture
@@ -121,22 +99,17 @@ def committed(engine):
     yield ids
 
     # Delete children before parents (foreign keys):
-    # events, attempts, sessions, payments, purchases, package, user.
+    # events, attempts, sessions, subscriptions, payments, purchases,
+    # package, user.
     with Session(engine) as cleanup:
         cleanup.execute(delete(PaymentEvent).where(
             (PaymentEvent.payment_id == ids["payment"])
             | (PaymentEvent.id.in_(ids["events"]))
         ))
-        cleanup.execute(delete(ActivationAttempt).where(
-            ActivationAttempt.session_id.in_(
-                select(WiFiSession.id).where(
-                    WiFiSession.payment_id == ids["payment"]
-                )
-            )
-        ))
-        cleanup.execute(delete(WiFiSession).where(
-            WiFiSession.payment_id == ids["payment"]
-        ))
+        session_ids = select(WiFiSession.id).where(WiFiSession.payment_id == ids["payment"])
+        cleanup.execute(delete(ActivationAttempt).where(ActivationAttempt.session_id.in_(session_ids)))
+        cleanup.execute(delete(WiFiSession).where(WiFiSession.payment_id == ids["payment"]))
+        cleanup.execute(delete(Subscription).where(Subscription.payment_id == ids["payment"]))
         cleanup.execute(delete(Payment).where(Payment.id == ids["payment"]))
         cleanup.execute(delete(Purchase).where(Purchase.id == ids["purchase"]))
         cleanup.execute(delete(Package).where(Package.id == ids["package"]))
@@ -144,14 +117,13 @@ def committed(engine):
         cleanup.commit()
 
 
-def deliver(engine, daraja, committed, event_id, fulfil):
+def deliver(engine, daraja, committed, event_id):
     """One callback delivery on its OWN session, so its OWN connection."""
     payload = body(committed["checkout"], receipt=committed["receipt"])
     with Session(engine) as session:
         return process_callback(
             session, daraja,
             event_id=event_id, payload=payload, raw_payload={"test": True},
-            fulfil=fulfil,
         )
 
 
@@ -165,11 +137,10 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
 
     barrier = threading.Barrier(2)
     daraja = BarrierDaraja(PAID, barrier)
-    fulfil = FakeFulfil()
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [
-            pool.submit(deliver, engine, daraja, committed, event_id, fulfil)
+            pool.submit(deliver, engine, daraja, committed, event_id)
             for event_id in committed["events"]
         ]
         # .result() re-raises any exception from a thread, so a crash in
@@ -202,6 +173,20 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
         assert payment.mpesa_receipt_number == committed["receipt"]
         assert purchase.status == "paid"
         assert successful == [committed["payment"]]
-        # Only the delivery that really applied the success may start
-        # fulfilment. A duplicate must never trigger a second activation.
-        assert fulfil.calls == [committed["payment"]]
+
+        # Only the delivery that applied the success started fulfilment, so
+        # there is exactly one subscription, session and attempt (.one()
+        # fails on zero or two).
+        assert sorted(r.fulfilment is not None for r in results) == [False, True]
+        subscription = check.scalars(
+            select(Subscription).where(Subscription.payment_id == payment.id)
+        ).one()
+        session = check.scalars(
+            select(WiFiSession).where(WiFiSession.payment_id == payment.id)
+        ).one()
+        attempt = check.scalars(
+            select(ActivationAttempt).where(ActivationAttempt.session_id == session.id)
+        ).one()
+        assert session.subscription_id == subscription.id
+        assert attempt.status == "succeeded"
+        

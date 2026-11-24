@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
+import { listStaffCustomers, StaffSessionError } from '../api.js'
 import '../styles/customers.css'
 
 export const initialCustomers = demoDataEnabled ? [
@@ -21,12 +22,24 @@ export const initialCustomers = demoDataEnabled ? [
 })) : []
 
 const statuses = ['All', 'Active', 'Expired', 'Flagged']
+const accountStatuses = ['All', 'Active', 'Suspended', 'Inactive']
+const pageSize = 7
+
+function toCustomer(record) {
+  return {
+    id: String(record.id),
+    name: record.full_name,
+    phone: record.phone || 'Unavailable',
+    status: record.status.charAt(0).toUpperCase() + record.status.slice(1),
+    registeredOn: record.created_at,
+  }
+}
 
 function initials(name) {
   return name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
 }
 
-function CustomerDialog({ customer, onClose, onRegister }) {
+function CustomerDialog({ customer, onClose, onRegister, live }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [plan, setPlan] = useState('Basic Plan')
@@ -58,12 +71,18 @@ function CustomerDialog({ customer, onClose, onRegister }) {
             <div><span>Customer ID</span><strong>{customer.id}</strong></div>
             <div><span>Phone number</span><strong>{customer.phone}</strong></div>
             <div><span>Account status</span><strong>{customer.status}</strong></div>
-            <div><span>M-PESA verification</span><strong>{customer.mpesaVerified ? 'Verified' : 'Not verified'}</strong></div>
-            <div><span>Current package</span><strong>{customer.plan}</strong></div>
-            <div><span>Package price</span><strong>KES {customer.price.toLocaleString('en-KE')}</strong></div>
-            <div><span>Data usage</span><strong>{customer.used} / {customer.quota} GB</strong></div>
+            {live ? (
+              <div><span>Registration date</span><strong>{dateLabel(customer.registeredOn, true)}</strong></div>
+            ) : (
+              <>
+                <div><span>M-PESA verification</span><strong>{customer.mpesaVerified ? 'Verified' : 'Not verified'}</strong></div>
+                <div><span>Current package</span><strong>{customer.plan}</strong></div>
+                <div><span>Package price</span><strong>KES {customer.price.toLocaleString('en-KE')}</strong></div>
+                <div><span>Data usage</span><strong>{customer.used} / {customer.quota} GB</strong></div>
+              </>
+            )}
           </div>
-          <p className="customer-modal-note">Demonstration profile. No live subscriber account is connected.</p>
+          {!live && <p className="customer-modal-note">Demonstration profile. No live subscriber account is connected.</p>}
           <button type="button" className="customer-primary-button modal-action" onClick={closeDialog}>Close profile</button>
         </dialog>
     )
@@ -132,14 +151,18 @@ function CustomerDialog({ customer, onClose, onRegister }) {
   )
 }
 
-function dateLabel(date) {
+function dateLabel(date, live = false) {
   if (!date) return 'Unavailable'
-  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'UTC' })
+  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: live ? 'Africa/Nairobi' : 'UTC' })
     .format(new Date(date))
 }
 
-export default function CustomersPage({ onOpenProfile } = {}) {
-  const [customers, setCustomers] = useState(initialCustomers)
+export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } = {}) {
+  const live = Boolean(accessToken)
+  const showDemo = !live && demoDataEnabled
+  const [customers, setCustomers] = useState(() => showDemo ? initialCustomers : [])
+  const [request, setRequest] = useState({ loading: live })
+  const [reload, setReload] = useState(0)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('All')
   const [packageName, setPackageName] = useState('')
@@ -147,10 +170,34 @@ export default function CustomersPage({ onOpenProfile } = {}) {
   const [page, setPage] = useState(1)
   const [dialog, setDialog] = useState(null)
 
-  const pageSize = 7
+  const liveQuery = search.trim()
+  useEffect(() => {
+    if (!accessToken) return undefined
+    const controller = new AbortController()
+    const { signal } = controller
+
+    setRequest({ loading: true })
+    listStaffCustomers(accessToken, {
+      query: liveQuery,
+      status: status === 'All' ? undefined : status.toLowerCase(),
+      limit: pageSize + 1,
+      offset: (page - 1) * pageSize,
+      signal,
+    }).then((records) => {
+      if (signal.aborted) return
+      setCustomers(records.slice(0, pageSize).map(toCustomer))
+      setRequest({ hasNext: records.length > pageSize })
+    }).catch((error) => {
+      if (signal.aborted) return
+      if (error instanceof StaffSessionError) onSignOut?.()
+      else setRequest({ error: 'Could not load customers. Please try again.' })
+    })
+    return () => controller.abort()
+  }, [accessToken, liveQuery, onSignOut, page, reload, status])
+
   const term = search.trim().toLowerCase()
   const phoneTerm = term.replace(/\D/g, '')
-  const packages = [...new Set(customers.map((customer) => customer.plan))]
+  const packages = showDemo ? [...new Set(customers.map((customer) => customer.plan))] : []
   const matchesControls = customers.filter((customer) =>
     (!packageName || customer.plan === packageName) &&
     (!registeredOn || customer.registeredOn === registeredOn) &&
@@ -161,7 +208,7 @@ export default function CustomersPage({ onOpenProfile } = {}) {
   const filtered = matchesControls.filter((customer) => status === 'All' || customer.status === status)
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize))
   const start = (page - 1) * pageSize
-  const visible = filtered.slice(start, start + pageSize)
+  const visible = live ? (request.loading || request.error ? [] : customers) : filtered.slice(start, start + pageSize)
   const metrics = [
     { label: 'Total Registered', count: customers.length, description: 'Demo subscriber accounts', icon: 'groups' },
     { label: 'Active Online', count: customers.filter(({ connection }) => connection === 'Online').length, description: 'Demo connections online', icon: 'wifi' },
@@ -177,7 +224,7 @@ export default function CustomersPage({ onOpenProfile } = {}) {
   }
 
   function dismissDialog() {
-    dialog.trigger.focus()
+    dialog.trigger?.focus()
     setDialog(null)
   }
 
@@ -193,9 +240,9 @@ export default function CustomersPage({ onOpenProfile } = {}) {
         <div>
           <p className="eyebrow">Subscriber management / Directory</p>
           <h1 id="customers-title">Customers</h1>
-          <p className="page-description">View and manage registered customers, subscription status, and access records.</p>
+          <p className="page-description">{live ? 'Review registered customer accounts.' : 'View and manage registered customers, subscription status, and access records.'}</p>
         </div>
-        <button type="button" className="customer-primary-button" onClick={(event) => setDialog({ trigger: event.currentTarget })}>
+        <button type="button" className="customer-primary-button" disabled={!showDemo} onClick={(event) => setDialog({ trigger: event.currentTarget })}>
           <span className="material-symbols-outlined" aria-hidden="true">add</span>
           Register customer
         </button>
@@ -208,8 +255,8 @@ export default function CustomersPage({ onOpenProfile } = {}) {
               <span>{label}</span>
               <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
             </div>
-            <strong>{count}</strong>
-            <p>{description}</p>
+            <strong>{showDemo ? count : 'Unavailable'}</strong>
+            {showDemo && <p>{description}</p>}
           </article>
         ))}
       </section>
@@ -217,23 +264,23 @@ export default function CustomersPage({ onOpenProfile } = {}) {
       <section className="customer-directory-controls" aria-label="Directory filters">
         <div className="customer-filter-fields">
           <input type="search" aria-label="Search customers" placeholder="Search name, phone or customer ID"
-            value={search} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
-          <select aria-label="Filter by package" value={packageName}
+            value={search} maxLength={live ? 100 : undefined} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
+          <select aria-label="Filter by package" disabled={!showDemo} value={packageName}
             onChange={(event) => { setPackageName(event.target.value); setPage(1) }}>
             <option value="">All packages</option>
             {packages.map((plan) => <option key={plan}>{plan}</option>)}
           </select>
           <label className="customer-date-filter">
             Registration date
-            <input type="date" value={registeredOn}
+            <input type="date" disabled={!showDemo} value={registeredOn}
               onChange={(event) => { setRegisteredOn(event.target.value); setPage(1) }} />
           </label>
         </div>
         <div className="customer-filter-list" role="group" aria-label="Filter customers by status">
-          {statuses.map((filter) => (
+          {(live ? accountStatuses : statuses).map((filter) => (
             <button key={filter} type="button" aria-pressed={status === filter}
               onClick={() => { setStatus(filter); setPage(1) }}>
-              {filter} ({matchesControls.filter((customer) => filter === 'All' || customer.status === filter).length})
+              {filter}{showDemo && ` (${matchesControls.filter((customer) => filter === 'All' || customer.status === filter).length})`}
             </button>
           ))}
           {(term || status !== 'All' || packageName || registeredOn) &&
@@ -246,7 +293,7 @@ export default function CustomersPage({ onOpenProfile } = {}) {
           <table className="customer-table" aria-label="Customers">
             <thead>
               <tr>
-                {['Customer name', 'Phone number', 'Registration date', 'Current package', 'Connection status', 'Expiry', 'Actions'].map((label) => (
+                {['Customer name', 'Phone number', 'Registration date', ...(live ? ['Account status'] : []), 'Current package', 'Connection status', 'Expiry', 'Actions'].map((label) => (
                   <th key={label} scope="col">{label}</th>
                 ))}
               </tr>
@@ -261,30 +308,46 @@ export default function CustomersPage({ onOpenProfile } = {}) {
                     </div>
                   </th>
                   <td>{customer.phone}</td>
-                  <td><time dateTime={customer.registeredOn}>{dateLabel(customer.registeredOn)}</time></td>
-                  <td><span className="customer-package">{customer.plan}</span></td>
-                  <td><span className="customer-connection" data-online={customer.connection === 'Online'}>{customer.connection}</span></td>
+                  <td><time dateTime={customer.registeredOn}>{dateLabel(customer.registeredOn, live)}</time></td>
+                  {live && <td>{customer.status}</td>}
+                  <td><span className="customer-package">{customer.plan || 'Unavailable'}</span></td>
+                  <td><span className="customer-connection" data-online={customer.connection === 'Online'}>{customer.connection || 'Unavailable'}</span></td>
                   <td>{customer.expiresOn ? <time dateTime={customer.expiresOn}>{dateLabel(customer.expiresOn)}</time> : 'Unavailable'}</td>
                   <td><button type="button" className="customer-secondary-button"
-                    aria-label={`View profile for ${customer.name}`} onClick={(event) => onOpenProfile ? onOpenProfile(customer) : setDialog({ customer, trigger: event.currentTarget })}>View profile</button></td>
+                    aria-label={`View profile for ${customer.name}`} onClick={(event) => !live && onOpenProfile ? onOpenProfile(customer) : setDialog({ customer, trigger: event.currentTarget })}>View profile</button></td>
                 </tr>
               ))}
-              {!visible.length && <tr><td colSpan={7}>No customers found. Try another search or clear the filters.</td></tr>}
+              {!visible.length && (
+                <tr>
+                  <td colSpan={live ? 8 : 7}>
+                    {live && request.loading ? <span role="status">Loading customers…</span>
+                      : live && request.error ? (
+                        <>
+                          <p role="alert">{request.error}</p>
+                          <button type="button" className="customer-secondary-button" onClick={() => setReload((attempt) => attempt + 1)}>Retry</button>
+                        </>
+                      ) : 'No customers found. Try another search or clear the filters.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="customer-pagination">
-          <span role="status">Showing {visible.length ? start + 1 : 0}–{start + visible.length} of {filtered.length} sample records</span>
+          <span role="status">
+            {live ? (!request.loading && !request.error ? `${visible.length} records on this page` : '')
+              : showDemo && `Showing ${visible.length ? start + 1 : 0}–${start + visible.length} of ${filtered.length} sample records`}
+          </span>
           <nav aria-label="Customer pages">
-            <button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => setPage(page - 1)}>‹</button>
-            <span>{page} / {pages}</span>
-            <button type="button" aria-label="Next page" disabled={page >= pages} onClick={() => setPage(page + 1)}>›</button>
+            <button type="button" aria-label="Previous page" disabled={page <= 1 || (live && request.loading)} onClick={() => setPage(page - 1)}>‹</button>
+            <span>{live ? `Page ${page}` : `${page} / ${pages}`}</span>
+            <button type="button" aria-label="Next page" disabled={live ? request.loading || !request.hasNext : page >= pages} onClick={() => setPage(page + 1)}>›</button>
           </nav>
         </div>
       </section>
 
-      <p className="customer-data-footnote">Illustrative demo data. Registration lasts for this page visit.</p>
-      {dialog && <CustomerDialog customer={dialog.customer} onClose={dismissDialog} onRegister={registerCustomer} />}
+      {showDemo && <p className="customer-data-footnote">Illustrative demo data. Registration lasts for this page visit.</p>}
+      {dialog && <CustomerDialog live={live} customer={dialog.customer} onClose={dismissDialog} onRegister={registerCustomer} />}
     </section>
   )
 }

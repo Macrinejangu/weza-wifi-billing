@@ -16,6 +16,16 @@ class PurchaseIn(CheckoutIn):
     device_reference: str | None = Field(default=None, max_length=2048)
 
 
+class CustomerCheckoutIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    package_id: int
+
+
+class CustomerPurchaseIn(CustomerCheckoutIn):
+    device_reference: str | None = Field(default=None, max_length=2048)
+
+
 class DeviceReferenceOut(BaseModel):
     device_reference: str
 
@@ -37,6 +47,15 @@ class MockPaymentIn(BaseModel):
 class PaymentOut(Out):
     id: int
     status: str
+    mpesa_receipt_number: str | None
+
+
+class CustomerPaymentRead(BaseModel):
+    id: int
+    purchase_id: int
+    status: str
+    amount: int
+    package_name: str
     mpesa_receipt_number: str | None
 
 

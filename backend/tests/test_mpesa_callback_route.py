@@ -5,6 +5,8 @@ policy and a fake Daraja. No network, no real configuration.
 """
 
 import json
+import logging
+from datetime import timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -19,11 +21,12 @@ from app.api.routes.mpesa_callback import (
 from app.api.routes.payments import get_daraja_client
 from app.db.session import get_db
 from app.main import app
-from app.models import Payment, PaymentEvent
+from app.models import ActivationAttempt, Payment, PaymentEvent, Subscription, WiFiSession
 from app.payments.callback_ip_policy import CallbackIpPolicy
 from app.payments.callback_security import CallbackSecurityPolicy
+from app.services.callback_processing import replay_callback
 
-from test_callback_processing import PAID, FakeDaraja, body
+from test_callback_processing import PAID, UNKNOWN, FakeDaraja, body
 from test_payment_settlement import make_payment, make_purchase
 
 TOKEN = "Abc123_-" * 5  # 40 URL-safe characters
@@ -100,6 +103,33 @@ def test_duplicate_delivery_settles_once_and_queries_once(api, db, pending, dara
     assert [e.processing_status for e in events(db)] == ["applied", "duplicate"]
     assert daraja.calls == ["ws_CO_0001"]
     assert db.query(Payment).filter_by(status="successful").count() == 1
+    subscription = db.query(Subscription).filter_by(payment_id=payment.id).one()
+    session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
+    assert session.subscription_id == subscription.id
+    assert session.activation_status == "succeeded"
+    assert subscription.start_date == session.started_at == payment.paid_at
+    assert subscription.end_date == session.expires_at == payment.paid_at + timedelta(
+        minutes=payment.purchase.duration_minutes
+    )
+    assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
+
+
+def test_activation_failure_preserves_the_verified_payment(api, db, pending, monkeypatch):
+    _, payment = pending
+
+    def fail_activation(**kwargs):
+        raise RuntimeError("Mock router unavailable")
+
+    monkeypatch.setattr("app.services.session_service.activate_access_device", fail_activation)
+    assert post(api, json.dumps(body())).json() == ACCEPTED_REPLY
+    assert post(api, json.dumps(body())).json() == ACCEPTED_REPLY
+
+    db.expire_all()
+    assert payment.status == "successful"
+    session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
+    assert session.activation_status == "failed"
+    assert session.subscription.start_date == payment.paid_at
+    assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
 
 
 def test_wrong_token_gets_a_plain_404_and_leaves_no_audit_row(api, db, pending):
@@ -203,3 +233,64 @@ def test_lookup_error_is_not_turned_into_a_404_by_main(api, db, pending, monkeyp
 
     assert response.status_code == 500
     assert "payment 9" not in response.text
+
+
+def test_replay_recovers_callback_that_arrived_before_request_ids(api, db, pending, daraja):
+    purchase, payment = pending
+    checkout, merchant = payment.checkout_request_id, payment.merchant_request_id
+    payment.checkout_request_id = payment.merchant_request_id = None
+    db.commit()
+
+    assert post(api, json.dumps(body())).status_code == 200
+    original = events(db)[0]
+    assert original.processing_status == "unmatched"
+    original_id = original.id
+    assert daraja.calls == []
+
+    payment.checkout_request_id, payment.merchant_request_id = checkout, merchant
+    db.commit()
+    assert replay_callback(db, daraja, original_id).outcome == "applied"
+    assert replay_callback(db, daraja, original_id).outcome == "duplicate"
+
+    audit_rows = events(db)
+    assert [row.processing_status for row in audit_rows] == ["unmatched", "applied", "duplicate"]
+    assert [row.payload["replay_of_event_id"] for row in audit_rows[1:]] == [original_id, original_id]
+    assert daraja.calls == [checkout]
+    assert payment.status == "successful"
+    assert purchase.status == "paid"
+
+
+def test_replay_recovers_inconclusive_query(api, db, pending, daraja):
+    _, payment = pending
+    daraja.result = UNKNOWN
+    assert post(api, json.dumps(body())).status_code == 200
+    original = events(db)[0]
+    assert original.processing_status == "rejected"
+    assert payment.status == "pending"
+
+    daraja.result = PAID
+    assert replay_callback(db, daraja, original.id).outcome == "applied"
+    assert payment.status == "successful"
+
+
+def test_replay_rejects_callback_with_wrong_amount(api, db, pending, daraja):
+    _, payment = pending
+    assert post(api, json.dumps(body(amount=99999))).status_code == 200
+    event = events(db)[0]
+
+    with pytest.raises(ValueError, match="not eligible"):
+        replay_callback(db, daraja, event.id)
+
+    assert len(events(db)) == 1
+    assert daraja.calls == []
+    assert payment.status == "pending"
+
+
+def test_uvicorn_access_log_omits_callback_path_and_keeps_health(caplog):
+    logger = logging.getLogger("uvicorn.access")
+    with caplog.at_level(logging.INFO, logger=logger.name):
+        logger.info('%s - "%s %s HTTP/%s" %d', "peer", "POST", URL, "1.1", 404)
+        logger.info('%s - "%s %s HTTP/%s" %d', "peer", "GET", "/health", "1.1", 200)
+
+    assert TOKEN not in caplog.text
+    assert "GET /health" in caplog.text
