@@ -722,6 +722,9 @@ def activate_hotspot_device(
             "download_speed_mbps": download_speed,
             "upload_speed_mbps": upload_speed,
             "rate_limit": rate_limit,
+            "router_identity": expected_identity,
+            "router_session_id": matching_active_devices[0].get(".id"),
+            "router_server_name": server_name,
         }
 
     except Exception as activation_error:
@@ -734,6 +737,190 @@ def activate_hotspot_device(
             ) from activation_error
 
         raise
+
+    finally:
+        api.close()
+
+
+def disconnect_hotspot_device(
+    mac_address: str,
+    server_name: str,
+    router_identity: str | None = None,
+    router_session_id: str | None = None,
+) -> dict:
+    """
+    Disable one WEZA Hotspot user and remove only its recorded active session.
+
+    The recorded RouterOS session ID is checked before any router mutation.
+    Disabling the user first prevents MAC authentication from immediately
+    creating a replacement session after the active session is removed.
+    """
+    mac = _normalize_mac(mac_address)
+
+    settings = router_settings()
+    expected_identity = settings.get("expected_identity")
+
+    if not expected_identity:
+        raise RouterActivationError(
+            "Expected MikroTik router identity is not configured"
+        )
+
+    if router_identity != expected_identity:
+        raise RouterActivationError(
+            "Recorded session router identity does not match "
+            "the configured WEZA router"
+        )
+
+    if not server_name:
+        raise RouterActivationError(
+            "A verified WEZA Hotspot server name is required"
+        )
+
+    if not router_session_id:
+        raise RouterActivationError(
+            "Recorded RouterOS session ID is required for safe disconnection"
+        )
+
+    api = connect_router()
+
+    try:
+        identities = list(api.path("system", "identity"))
+
+        if (
+            not identities
+            or identities[0].get("name") != expected_identity
+        ):
+            raise RouterActivationError(
+                "Connected router identity does not match WEZA configuration"
+            )
+
+        hotspot_servers = list(api.path("ip", "hotspot"))
+
+        matching_servers = [
+            server
+            for server in hotspot_servers
+            if server.get("interface") == HOTSPOT_INTERFACE
+            and server.get("profile") == HOTSPOT_PROFILE
+            and server.get("disabled") != "true"
+            and server.get("name") == server_name
+        ]
+
+        if len(matching_servers) != 1:
+            raise RouterActivationError(
+                "The recorded WEZA Hotspot server could not be verified"
+            )
+
+        users_path = api.path("ip", "hotspot", "user")
+
+        def find_matching_users():
+            return [
+                user
+                for user in list(users_path)
+                if user.get("name", "").upper() == mac
+                and user.get("server") == server_name
+            ]
+
+        matching_users = find_matching_users()
+
+        if len(matching_users) != 1:
+            raise RouterActivationError(
+                "Expected exactly one matching WEZA Hotspot user; "
+                "refusing ambiguous or unsafe disconnection"
+            )
+
+        hotspot_user = matching_users[0]
+        user_id = hotspot_user.get(".id")
+
+        if not user_id:
+            raise RouterActivationError(
+                "Matching Hotspot user has no identifiable RouterOS ID"
+            )
+
+        def is_disabled(user):
+            return str(user.get("disabled", "false")).lower() in {
+                "yes",
+                "true",
+            }
+
+        active_path = api.path("ip", "hotspot", "active")
+
+        def find_matching_sessions():
+            return [
+                device
+                for device in list(active_path)
+                if device.get("user", "").upper() == mac
+                and device.get("server") == server_name
+            ]
+
+        # Verify the exact active session before changing router state.
+        matches = find_matching_sessions()
+
+        if len(matches) > 1:
+            raise RouterActivationError(
+                "Multiple active Hotspot sessions found; "
+                "refusing ambiguous disconnection"
+            )
+
+        current_session_id = None
+
+        if matches:
+            current_session_id = matches[0].get(".id")
+
+            if not current_session_id:
+                raise RouterActivationError(
+                    "Current RouterOS session has no identifiable ID"
+                )
+
+            if current_session_id != router_session_id:
+                raise RouterActivationError(
+                    "Active RouterOS session ID does not match the "
+                    "recorded WEZA session; refusing disconnection"
+                )
+
+        # Disable MAC authentication only after exact-session verification.
+        if not is_disabled(hotspot_user):
+            users_path.update(
+                **{
+                    ".id": user_id,
+                    "disabled": "yes",
+                }
+            )
+
+        verified_users = find_matching_users()
+
+        if len(verified_users) != 1 or not is_disabled(verified_users[0]):
+            raise RouterActivationError(
+                "RouterOS did not confirm that the Hotspot user was disabled"
+            )
+
+        # An absent session is safe to treat as an idempotent retry.
+        if current_session_id is not None:
+            active_path.remove(current_session_id)
+
+        remaining_matches = find_matching_sessions()
+
+        if remaining_matches:
+            raise RouterActivationError(
+                "RouterOS did not confirm that the recorded Hotspot session "
+                "was disconnected"
+            )
+
+        final_users = find_matching_users()
+
+        if len(final_users) != 1 or not is_disabled(final_users[0]):
+            raise RouterActivationError(
+                "Hotspot user is not confirmed disabled after disconnection"
+            )
+
+        return {
+            "status": "DISCONNECTED",
+            "mac_address": mac,
+            "server": server_name,
+            "router_identity": expected_identity,
+            "router_session_id": router_session_id,
+            "already_disconnected": current_session_id is None,
+            "user_disabled": True,
+        }
 
     finally:
         api.close()

@@ -145,15 +145,38 @@ class FakeAPI:
         )
 
     def _reauthenticate_after_remove(self, active_device):
-      if active_device.get(".id") not in self.initial_active_session_ids:
-        return
+        if active_device.get(".id") not in self.initial_active_session_ids:
+            return
 
-      self.active_devices.append({
-        ".id": "*replacement-session",
-        "user": active_device["user"],
-        "address": active_device["address"],
-        "server": active_device["server"],
-      })
+        # Find the Hotspot user responsible for this active session.
+        hotspot_users = self.paths[("ip", "hotspot", "user")]
+
+        matching_users = [
+            user
+            for user in hotspot_users
+            if user.get("name", "").upper()
+            == active_device.get("user", "").upper()
+            and user.get("server") == active_device.get("server")
+        ]
+
+        # MAC authentication cannot recreate a session when the user
+        # account has been disabled or no matching account exists.
+        if len(matching_users) != 1:
+            return
+
+        disabled = str(
+            matching_users[0].get("disabled", "false")
+        ).lower()
+
+        if disabled in {"yes", "true"}:
+            return
+
+        self.active_devices.append({
+            ".id": "*replacement-session",
+            "user": active_device["user"],
+            "address": active_device["address"],
+            "server": active_device["server"],
+        })
 
 
     def _poll_authentication(self):
@@ -1189,3 +1212,191 @@ def test_empty_user_add_id_preserves_unidentified_user_and_profile(
     assert len(api.active_devices) == 1
     assert api.active_devices[0]["user"] == "AA:BB:CC:DD:EE:FF"
     assert api.closed is True
+
+def _make_disconnect_test_api():
+    mac = "AA:BB:CC:DD:EE:FF"
+    server = "WEZA-Hotspot-Server"
+
+    api = FakeAPI(
+        active_devices=[
+            {
+                ".id": "*active-1",
+                "user": mac,
+                "address": "10.20.0.254",
+                "server": server,
+            }
+        ]
+    )
+
+    user = {
+        ".id": "*user-1",
+        "name": mac,
+        "server": server,
+        "profile": "WEZA-2M-5M",
+        "disabled": "no",
+    }
+
+    api.paths[("ip", "hotspot", "user")].append(user)
+    return api, user, mac, server
+
+
+def test_disconnect_hotspot_disables_user_and_prevents_reauthentication(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    result = router_service.disconnect_hotspot_device(
+        mac_address=mac,
+        server_name=server,
+        router_identity="CHR",
+        router_session_id="*active-1",
+    )
+
+    assert result["status"] == "DISCONNECTED"
+    assert result["user_disabled"] is True
+    assert result["already_disconnected"] is False
+
+    users = api.paths[("ip", "hotspot", "user")]
+    assert len(users) == 1
+    assert users[0][".id"] == user[".id"]
+    assert users[0]["disabled"] == "yes"
+
+    assert api.active_devices == []
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_is_idempotent_when_session_already_absent(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    first = router_service.disconnect_hotspot_device(mac, server, "CHR", "*active-1")
+    second = router_service.disconnect_hotspot_device(mac, server, "CHR", "*active-1")
+
+    assert first["status"] == "DISCONNECTED"
+    assert second["status"] == "DISCONNECTED"
+    assert second["already_disconnected"] is True
+    assert user["disabled"] == "yes"
+    assert api.active_devices == []
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_refuses_missing_user_without_removing_session(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    api.paths[("ip", "hotspot", "user")].clear()
+
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    with pytest.raises(router_service.RouterActivationError):
+        router_service.disconnect_hotspot_device(mac, server, "CHR", "*active-1")
+
+    assert len(api.active_devices) == 1
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_refuses_duplicate_users_without_removing_session(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+
+    duplicate = {**user, ".id": "*user-2"}
+    api.paths[("ip", "hotspot", "user")].append(duplicate)
+
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    with pytest.raises(router_service.RouterActivationError):
+        router_service.disconnect_hotspot_device(mac, server, "CHR", "*active-1")
+
+    assert len(api.active_devices) == 1
+    assert user["disabled"] == "no"
+    assert duplicate["disabled"] == "no"
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_does_not_remove_session_if_user_disable_fails(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    def refuse_update(self, **kwargs):
+        return None
+
+    monkeypatch.setattr(FakePath, "update", refuse_update)
+
+    with pytest.raises(router_service.RouterActivationError):
+        router_service.disconnect_hotspot_device(mac, server, "CHR", "*active-1")
+
+    assert user["disabled"] == "no"
+    assert len(api.active_devices) == 1
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_refuses_mismatched_session_id_without_mutation(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    with pytest.raises(
+        router_service.RouterActivationError,
+        match="does not match the recorded WEZA session",
+    ):
+        router_service.disconnect_hotspot_device(
+            mac, server, "CHR", "*different-session"
+        )
+
+    assert user["disabled"] == "no"
+    assert len(api.active_devices) == 1
+    assert api.active_devices[0][".id"] == "*active-1"
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_refuses_multiple_sessions_without_mutation(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    api.active_devices.append(
+        {
+            ".id": "*active-2",
+            "user": mac,
+            "address": "10.20.0.255",
+            "server": server,
+        }
+    )
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    with pytest.raises(
+        router_service.RouterActivationError,
+        match="Multiple active Hotspot sessions",
+    ):
+        router_service.disconnect_hotspot_device(
+            mac, server, "CHR", "*active-1"
+        )
+
+    assert user["disabled"] == "no"
+    assert len(api.active_devices) == 2
+    assert api.closed is True
+
+
+def test_disconnect_hotspot_requires_recorded_session_id_without_mutation(
+    monkeypatch, router_settings
+):
+    api, user, mac, server = _make_disconnect_test_api()
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+
+    with pytest.raises(
+        router_service.RouterActivationError,
+        match="Recorded RouterOS session ID is required",
+    ):
+        router_service.disconnect_hotspot_device(
+            mac, server, "CHR", None
+        )
+
+    assert user["disabled"] == "no"
+    assert len(api.active_devices) == 1
+    assert api.closed is False

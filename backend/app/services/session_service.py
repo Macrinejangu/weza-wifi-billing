@@ -123,6 +123,9 @@ def activate_session(
 
         session.status = "ACTIVE"
         session.activation_status = "succeeded"
+        session.router_identity = result.get("router_identity")
+        session.router_session_id = result.get("router_session_id")
+        session.router_server_name = result.get("router_server_name")
         session.started_at = datetime.now(timezone.utc)
         session.expires_at = session.started_at + timedelta(
             minutes=purchase.duration_minutes
