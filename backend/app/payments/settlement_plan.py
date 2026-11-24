@@ -1,10 +1,12 @@
-"""Decide what a verified callback should do to a payment.
+"""Decide what a verified callback, or a status query alone, does to a payment.
 
 This module is pure logic with no database or network access, so every
 rule can be tested exhaustively. The callers are:
 
 1. Phase 1 (no lock): ask requires_status_query(); if True, call the STK query.
 2. Phase 2 (row locked): re-read the payment status, then ask decide_settlement().
+3. Sweeper (no callback ever arrived): ask the STK query, then, with the row
+   locked and the status re-read, ask decide_query_settlement().
 
 Fail-closed rules:
 * Callbacks are unsigned, so a callback alone never grants access. A payment
@@ -90,3 +92,49 @@ def decide_settlement(
     if query_outcome == StkQueryOutcome.PAID:
         return SettlementAction.APPLY_SUCCESS
     return SettlementAction.KEEP_PENDING
+
+
+def decide_query_settlement(
+    *,
+    current_status: PaymentStatus,
+    query_outcome: StkQueryOutcome | None,
+) -> SettlementAction:
+    """Choose the single action when only a status query is available.
+
+    Used by the sweeper, where no callback ever arrived. There is no verdict
+    to check: the query was asked by our own checkout_request_id, so the only
+    inputs are the status read UNDER THE ROW LOCK and the query outcome.
+
+    Rules:
+    * Open (pending or expired) and PAID: apply success.
+    * Pending and FAILED: apply failure. Expired and FAILED: already settled,
+      because expired -> failed is not allowed.
+    * UNKNOWN (or no answer) never changes anything: an open payment stays
+      pending, a settled payment is left as it is.
+    * Successful then FAILED, and failed then PAID, contradict a final state
+      and are rejected for staff.
+    * An unrecognised stored status is rejected. Fail closed.
+    """
+    try:
+        status = PaymentStatus(current_status)
+    except ValueError:
+        return SettlementAction.REJECT
+
+    if status in _OPEN_STATUSES:
+        if query_outcome == StkQueryOutcome.PAID:
+            return SettlementAction.APPLY_SUCCESS
+        if query_outcome == StkQueryOutcome.FAILED:
+            if status == PaymentStatus.PENDING:
+                return SettlementAction.APPLY_FAILURE
+            return SettlementAction.ALREADY_SETTLED
+        return SettlementAction.KEEP_PENDING
+
+    if status == PaymentStatus.SUCCESSFUL:
+        if query_outcome == StkQueryOutcome.FAILED:
+            return SettlementAction.REJECT  # successful, then failed
+        return SettlementAction.ALREADY_SETTLED
+
+    # status is FAILED
+    if query_outcome == StkQueryOutcome.PAID:
+        return SettlementAction.REJECT  # failed, then paid
+    return SettlementAction.ALREADY_SETTLED
