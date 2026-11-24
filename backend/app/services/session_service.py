@@ -20,7 +20,12 @@ def create_session(
     *,
     verified_checkout: bool = False,
 ) -> WiFiSession:
-    """One session per payment, and only for a payment M-Pesa confirmed."""
+    """One session per payment, and only for a payment M-Pesa confirmed.
+
+    On the verified path a subscription is created as `pending` with no dates.
+    The customer's time starts only when the router confirms access
+    (activate_session), never when the payment is recorded.
+    """
     payment = db.get(Payment, payment_id, with_for_update=True)
 
     if payment is None:
@@ -49,9 +54,9 @@ def create_session(
                 user_id=purchase.user_id,
                 package_id=purchase.package_id,
                 payment_id=payment_id,
-                start_date=payment.paid_at,
-                end_date=payment.paid_at + timedelta(minutes=purchase.duration_minutes),
-                status="active",
+                start_date=None,
+                end_date=None,
+                status="pending",
             )
             db.add(subscription)
 
@@ -80,10 +85,16 @@ def activate_session(
     """
     Activate the purchased access service.
 
-    The provider confirms access separately from the subscription timer.
-    Legacy sessions without subscriptions keep their activation-based timer.
+    The customer's time starts when the router confirms access: started_at,
+    expires_at and the subscription dates are all set at that moment, from the
+    duration captured on the purchase. A failed or unconfirmed activation never
+    uses up paid time.
     """
-    session = db.get(WiFiSession, session_id, with_for_update=True)
+    # populate_existing: another worker may have committed a change while this
+    # call waited for the row lock. Never act on a stale in-memory copy.
+    session = db.get(
+        WiFiSession, session_id, with_for_update=True, populate_existing=True
+    )
 
     if session is None:
         raise LookupError("Session not found")
@@ -91,9 +102,19 @@ def activate_session(
     if session.activation_status == "succeeded":
         return session
 
+    # Read attempts by query, not through the cached session.attempts list,
+    # so a committed attempt from another worker is always seen.
+    latest_attempt = (
+        db.query(ActivationAttempt)
+        .filter_by(session_id=session.id)
+        .order_by(ActivationAttempt.attempt_number.desc())
+        .populate_existing()
+        .first()
+    )
+
     attempt = None
     if session.status == "ACTIVATING":
-        attempt = max(session.attempts, key=lambda item: item.attempt_number, default=None)
+        attempt = latest_attempt
         if attempt is None or attempt.error_code != RouterActivationUnconfirmed.__name__:
             raise ValueError("Cannot reconcile a session without an unconfirmed activation")
     elif session.status not in ("PAYMENT_CONFIRMED", "FAILED"):
@@ -102,16 +123,11 @@ def activate_session(
     purchase = session.payment.purchase
     reconciling = attempt is not None
     subscription = session.subscription
-    if subscription is not None and subscription.end_date <= datetime.now(timezone.utc) and not reconciling:
-        session.status = "EXPIRED"
-        subscription.status = "expired"
-        db.commit()
-        return session
 
     if attempt is None:
         attempt = ActivationAttempt(
             session_id=session.id,
-            attempt_number=len(session.attempts) + 1,
+            attempt_number=(latest_attempt.attempt_number if latest_attempt else 0) + 1,
         )
         session.status = "ACTIVATING"
         session.activation_status = "waiting"
@@ -186,14 +202,18 @@ def activate_session(
         attempt.error_code = None
         attempt.error_message = None
 
+        # The customer's time starts now, when the router confirmed.
+        confirmed_at = datetime.now(timezone.utc)
+        expires_at = confirmed_at + timedelta(minutes=purchase.duration_minutes)
+
         session.status = "ACTIVE"
         session.activation_status = "succeeded"
+        session.started_at = confirmed_at
+        session.expires_at = expires_at
         if subscription is not None:
-            session.started_at = subscription.start_date
-            session.expires_at = subscription.end_date
-        else:
-            session.started_at = datetime.now(timezone.utc)
-            session.expires_at = session.started_at + timedelta(minutes=purchase.duration_minutes)
+            subscription.start_date = confirmed_at
+            subscription.end_date = expires_at
+            subscription.status = "active"
 
     attempt.completed_at = datetime.now(timezone.utc)
 

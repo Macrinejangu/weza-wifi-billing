@@ -25,6 +25,7 @@ from app.models import ActivationAttempt, Payment, PaymentEvent, Subscription, W
 from app.payments.callback_ip_policy import CallbackIpPolicy
 from app.payments.callback_security import CallbackSecurityPolicy
 from app.services.callback_processing import replay_callback
+from app.services.router import RouterActivationUnconfirmed
 
 from test_callback_processing import PAID, UNKNOWN, FakeDaraja, body
 from test_payment_settlement import make_payment, make_purchase
@@ -107,8 +108,12 @@ def test_duplicate_delivery_settles_once_and_queries_once(api, db, pending, dara
     session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
     assert session.subscription_id == subscription.id
     assert session.activation_status == "succeeded"
-    assert subscription.start_date == session.started_at == payment.paid_at
-    assert subscription.end_date == session.expires_at == payment.paid_at + timedelta(
+    # The customer's time starts when the router confirmed, which can only be
+    # at or after the moment the payment was recorded.
+    assert subscription.status == "active"
+    assert subscription.start_date == session.started_at
+    assert subscription.start_date >= payment.paid_at
+    assert subscription.end_date == session.expires_at == subscription.start_date + timedelta(
         minutes=payment.purchase.duration_minutes
     )
     assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
@@ -128,8 +133,37 @@ def test_activation_failure_preserves_the_verified_payment(api, db, pending, mon
     assert payment.status == "successful"
     session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
     assert session.activation_status == "failed"
-    assert session.subscription.start_date == payment.paid_at
+    # A failed activation must not use up any paid time.
+    assert session.started_at is None and session.expires_at is None
+    assert session.subscription.status == "pending"
+    assert session.subscription.start_date is None
+    assert session.subscription.end_date is None
     assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
+
+
+def test_unconfirmed_activation_leaves_the_subscription_pending(
+    api, db, pending, monkeypatch
+):
+    _, payment = pending
+
+    def unconfirmed(**kwargs):
+        raise RouterActivationUnconfirmed("RouterOS has not confirmed an active session")
+
+    monkeypatch.setattr("app.services.session_service.activate_access_device", unconfirmed)
+    assert post(api, json.dumps(body())).json() == ACCEPTED_REPLY
+
+    db.expire_all()
+    assert payment.status == "successful"
+    session = db.query(WiFiSession).filter_by(payment_id=payment.id).one()
+    assert (session.status, session.activation_status) == ("ACTIVATING", "waiting")
+    # No time is given while the router has not confirmed access.
+    assert session.started_at is None and session.expires_at is None
+    assert session.subscription.status == "pending"
+    assert session.subscription.start_date is None
+    assert session.subscription.end_date is None
+    attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()
+    assert attempt.status == "started"
+    assert attempt.error_code == "RouterActivationUnconfirmed"
 
 
 def test_wrong_token_gets_a_plain_404_and_leaves_no_audit_row(api, db, pending):
@@ -294,3 +328,4 @@ def test_uvicorn_access_log_omits_callback_path_and_keeps_health(caplog):
 
     assert TOKEN not in caplog.text
     assert "GET /health" in caplog.text
+    
