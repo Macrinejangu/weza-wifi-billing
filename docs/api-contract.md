@@ -128,7 +128,7 @@ A wrong IP, a wrong token and an unconfigured endpoint all get the same empty 40
 
 | HTTP | Meaning |
 | --- | --- |
-| 200 | The message was stored and handled. Also returned for messages we rejected, because Safaricom cannot act on our reasons. Body: `{"ResultCode": 0, "ResultDesc": "Accepted"}`. |
+| 200 | The message was stored and handled. Also returned for messages we rejected, because Safaricom cannot act on our reasons. It is also returned when internet activation failed (see Fulfilment below). Body: `{"ResultCode": 0, "ResultDesc": "Accepted"}`. |
 | 404 | IP, token or configuration check failed. Empty body. |
 | 413 | Body over 64 KB or a bad `Content-Length`. Nothing is stored. |
 | 503 | The message could not be recorded (database down). |
@@ -137,6 +137,23 @@ A wrong IP, a wrong token and an unconfigured endpoint all get the same empty 40
 ### Audit trail
 
 Every accepted message is saved in `payment_events` before processing and ends as `applied`, `duplicate`, `rejected` or `unmatched`. A duplicate delivery changes nothing.
+
+### Fulfilment after a verified payment
+
+Added in WEZA-51. After the callback has freshly applied a verified success and that change is committed, the backend creates the session for the payment and asks the router for access. See [session states](session-states.md) for the states and outcomes.
+
+- **The reply to Safaricom never changes.** It stays `200` with `{"ResultCode": 0, "ResultDesc": "Accepted"}` whether activation succeeds, fails, is unconfirmed, or crashes. Activation problems are never reported in the callback response, and they never make a 500.
+- **The payment is never changed by fulfilment.** A router failure leaves the payment `successful`. Payment status and activation status are separate.
+- **Only a freshly applied success starts fulfilment.** A duplicate callback (`duplicate`), a failed result, a rejected message and an unmatched message never start it. A retry after a failed activation is always deliberate (WEZA-63), never a side effect of Safaricom resending.
+- **At most one session and one router call per payment.** The database enforces one session per payment and one in-flight attempt per session. Two callbacks arriving at the same instant still produce one session.
+- **Where an activation problem is visible.** The outcome is recorded on the session: `status`, `activation_status` and `failure_reason`, returned by `GET /api/sessions/{session_id}` (staff token). A staff list of unresolved cases is not built yet (WEZA-63).
+- **Timer.** The customer's time starts only when the router confirms (`started_at`, `expires_at`), never when the payment succeeds.
+
+Known gaps:
+
+- Fulfilment runs inside the callback request, so a slow router delays the reply to Safaricom. A background task would be the proper fix.
+- A crash between the payment commit and fulfilment leaves a successful payment with no session. Recovery is WEZA-63.
+- There is no endpoint to find a session by payment id yet.
 
 ### Unverified (not confirmed from official Daraja pages)
 
