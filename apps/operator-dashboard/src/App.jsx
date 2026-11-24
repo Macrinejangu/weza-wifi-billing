@@ -102,7 +102,7 @@ export default function App() {
     }
 
     return (
-      <DashboardLayout operator={operator} activePage={staffPage} onNavigate={setStaffPage} onSignOut={signOut}>
+      <DashboardLayout operator={operator} activePage={staffPage === 'audit-history' ? 'settings' : staffPage} onNavigate={setStaffPage} onSignOut={signOut}>
         {staffPage === 'overview' ? (
           <DashboardPage
             operator={operator}
@@ -120,6 +120,18 @@ export default function App() {
           <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'connection-issues' ? (
           <ConnectionIssuesPage accessToken={accessToken} onSignOut={signOut} />
+        ) : staffPage === 'settings' ? (
+          <SystemSettingsPage
+            accessToken={accessToken}
+            onSignOut={signOut}
+            onOpenAuditHistory={() => setStaffPage('audit-history')}
+          />
+        ) : staffPage === 'audit-history' ? (
+          <ActivityHistoryPage
+            accessToken={accessToken}
+            onSignOut={signOut}
+            onBack={() => setStaffPage('settings')}
+          />
         ) : staffPage === 'staff-profile' ? (
           <StaffProfilePage operator={operator} staff={staff} onSignOut={signOut} />
         ) : (
