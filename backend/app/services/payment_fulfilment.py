@@ -85,6 +85,14 @@ def fulfil_payment(
     try:
         session = create_session(db, payment_id)
         session_id = session.id
+        # Two simultaneous calls can both load the session as "not started"
+        # here (a plain read is not blocked by the other call's row lock).
+        # activate_session then waits for the lock, but SQLAlchemy would keep
+        # this stale copy instead of the winner's committed result, and the
+        # database CHECK constraint would reject the write. Expiring forces
+        # the locked read inside activate_session to reload the real row.
+        # (The same fix belongs in session_service, owned by WEZA-54.)
+        db.expire(session)
         session = activate_session(db, session_id, router=router)
         outcome = _classify(session)
     except (LookupError, ValueError) as error:
