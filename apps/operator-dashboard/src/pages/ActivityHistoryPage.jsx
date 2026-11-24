@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
+import { getStaffAuditHistory, StaffSessionError } from '../api.js'
 import '../styles/activity-history.css'
 
 const events = [
@@ -19,7 +20,7 @@ const filterOptions = [
   ['result', 'All Results'],
 ]
 
-function EventDrawer({ event, onClose, onInspectIssue }) {
+function EventDrawer({ event, onClose, onInspectIssue, live }) {
   const dialogRef = useRef(null)
 
   useEffect(() => {
@@ -40,7 +41,7 @@ function EventDrawer({ event, onClose, onInspectIssue }) {
     <dialog className="audit-drawer" ref={dialogRef} aria-labelledby="audit-event-title" onCancel={(e) => { e.preventDefault(); onClose() }}>
       <div className="audit-drawer-layout">
         <header>
-          <div><h2 id="audit-event-title">Event Details #{event.id}</h2><p>{recordDate} · {event.time} EAT · Demo</p></div>
+          <div><h2 id="audit-event-title">Event Details #{event.id}</h2><p>{event.date ?? recordDate} · {event.time} EAT{!live && ' · Demo'}</p></div>
           <button type="button" aria-label="Close event details" onClick={onClose}>×</button>
         </header>
         <div className="audit-drawer-body">
@@ -53,6 +54,7 @@ function EventDrawer({ event, onClose, onInspectIssue }) {
               <div><dt>Result</dt><dd><span className="audit-result" data-result={event.result}>{event.result}</span></dd></div>
             </dl>
           </section>
+          {!live && <>
           <section className="audit-detail-card">
             <h3>Chronological Trace</h3>
             <ol className="audit-trace">{trace.map(([time, label]) => <li key={time}><strong>{time} EAT</strong><p>{label}</p></li>)}</ol>
@@ -62,6 +64,7 @@ function EventDrawer({ event, onClose, onInspectIssue }) {
             <pre>{JSON.stringify({ event_id: event.id, action: event.type, record: event.record, result: event.result, demo: true }, null, 2)}</pre>
           </details>
           <p>Ledger signature verification is unavailable in this preview.</p>
+          </>}
         </div>
         <footer>
           <button type="button" onClick={onClose}>Close Inspector</button>
@@ -73,11 +76,64 @@ function EventDrawer({ event, onClose, onInspectIssue }) {
 }
 
 export default function ActivityHistoryPage(props) {
+  if (props.accessToken) return <LiveActivityHistory {...props} />
   if (!demoDataEnabled) return <section className="audit-page"><h1>Activity &amp; Audit History</h1><p role="status">Audit history is currently unavailable.</p></section>
-  return <DemoActivityHistory {...props} />
+  return <ActivityHistory {...props} entries={events} />
 }
 
-function DemoActivityHistory({ onBack, onInspectIssue }) {
+const auditPageSize = 50
+const auditDate = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeZone: 'Africa/Nairobi' })
+const auditTime = new Intl.DateTimeFormat('en-GB', { timeStyle: 'medium', timeZone: 'Africa/Nairobi' })
+
+function LiveActivityHistory({ accessToken, onSignOut, onBack }) {
+  const [offset, setOffset] = useState(0)
+  const [attempt, setAttempt] = useState(0)
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getStaffAuditHistory(accessToken, { offset, limit: auditPageSize, signal: controller.signal })
+      .then((records) => {
+        if (!controller.signal.aborted) setResult({ offset, attempt, records })
+      }).catch((error) => {
+        if (controller.signal.aborted) return
+        if (error instanceof StaffSessionError) onSignOut()
+        else setResult({ offset, attempt, error: error.message })
+      })
+    return () => controller.abort()
+  }, [accessToken, offset, attempt, onSignOut])
+
+  const current = result?.offset === offset && result?.attempt === attempt ? result : null
+  const entries = (current?.records ?? []).map((record) => ({
+    id: String(record.id),
+    date: auditDate.format(new Date(record.created_at)),
+    time: auditTime.format(new Date(record.created_at)),
+    actor: record.actor ?? 'System',
+    role: '',
+    type: record.entity_type,
+    action: record.action,
+    record: record.entity_id == null ? record.entity_type : `${record.entity_type} #${record.entity_id}`,
+    result: 'Recorded',
+  }))
+
+  return (
+    <ActivityHistory
+      key={offset}
+      entries={entries}
+      live
+      onBack={onBack}
+      loading={!current}
+      error={current?.error}
+      onRetry={() => setAttempt(attempt + 1)}
+      onPrevious={offset > 0 ? () => setOffset(offset - auditPageSize) : undefined}
+      onNext={entries.length === auditPageSize ? () => setOffset(offset + auditPageSize) : undefined}
+    />
+  )
+}
+
+function ActivityHistory({
+  onBack, onInspectIssue, entries, live, loading, error, onRetry, onPrevious, onNext,
+}) {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({})
   const [inspection, setInspection] = useState(null)
@@ -88,7 +144,7 @@ function DemoActivityHistory({ onBack, onInspectIssue }) {
   useEffect(() => { title.current?.focus() }, [])
 
   const term = search.trim().toLowerCase()
-  const visible = events.filter((event) =>
+  const visible = entries.filter((event) =>
     filterOptions.every(([key]) => !filters[key] || filters[key] === event[key])
     && fields.some((key) => event[key].toLowerCase().includes(term)),
   )
@@ -99,8 +155,12 @@ function DemoActivityHistory({ onBack, onInspectIssue }) {
   }
 
   function exportEvents() {
-    const rows = visible.map((event) => ({ date: recordDate, timezone: 'EAT', ...event }))
-    const quote = (value) => `"${String(value).replaceAll('"', '""')}"`
+    const rows = visible.map((event) => ({ date: event.date ?? recordDate, timezone: 'EAT', ...event }))
+    const quote = (value) => {
+      const text = String(value)
+      const escaped = /^[\s]*[=+@-]|^[\t\r\n]/.test(text) ? `'${text}` : text
+      return `"${escaped.replaceAll('"', '""')}"`
+    }
     const columns = ['date', 'timezone', ...fields]
     const content = format === 'json'
       ? JSON.stringify(rows, null, 2)
@@ -108,7 +168,7 @@ function DemoActivityHistory({ onBack, onInspectIssue }) {
     const url = URL.createObjectURL(new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = `weza-demo-audit.${format}`
+    link.download = `weza-${live ? '' : 'demo-'}audit.${format}`
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
@@ -117,22 +177,22 @@ function DemoActivityHistory({ onBack, onInspectIssue }) {
     <section className="audit-page">
       {onBack && <button type="button" className="audit-back" onClick={onBack}>‹ Back to System Settings</button>}
       <header className="page-heading audit-heading">
-        <div><p className="audit-eyebrow">Security &amp; Operations · Demo</p><h1 ref={title} tabIndex={-1}>Activity &amp; Audit History</h1><p>Review sample operator and system actions.</p></div>
+        <div><p className="audit-eyebrow">Security &amp; Operations{!live && ' · Demo'}</p><h1 ref={title} tabIndex={-1}>Activity &amp; Audit History</h1><p>{live ? 'Review recorded administrative actions.' : 'Review sample operator and system actions.'}</p></div>
         <div className="audit-actions">
-          <span>{recordDate} · EAT</span>
+          <span>{!live && `${recordDate} · `}EAT</span>
           <select aria-label="Audit export format" value={format} onChange={(e) => setFormat(e.target.value)}><option value="csv">CSV</option><option value="json">JSON</option></select>
           <button className="audit-primary" type="button" onClick={exportEvents} disabled={!visible.length}>Export Log</button>
         </div>
       </header>
 
       <section className="audit-panel audit-filters" aria-label="Audit filters">
-        <div className="audit-actions audit-filter-heading"><strong>{events.length} Sample Records</strong><button type="button" onClick={() => { setSearch(''); setFilters({}) }}>Clear Filters</button></div>
+        <div className="audit-actions audit-filter-heading"><strong>{entries.length} {live ? 'Records on this page' : 'Sample Records'}</strong><button type="button" onClick={() => { setSearch(''); setFilters({}) }}>Clear Filters</button></div>
         <div className="audit-actions">
           <input type="search" aria-label="Search audit history" placeholder="Search actor, event, or affected record" value={search} onChange={(e) => setSearch(e.target.value)} />
           {filterOptions.map(([key, label]) => (
             <select key={key} aria-label={label} value={filters[key] ?? ''} onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}>
               <option value="">{label}</option>
-              {[...new Set(events.map((event) => event[key]))].map((option) => <option key={option}>{option}</option>)}
+              {[...new Set(entries.map((event) => event[key]))].map((option) => <option key={option}>{option}</option>)}
             </select>
           ))}
         </div>
@@ -145,21 +205,29 @@ function DemoActivityHistory({ onBack, onInspectIssue }) {
             <tbody>
               {visible.map((event) => (
                 <tr key={event.id}>
-                  <th scope="row">{event.time} EAT<small>{recordDate}</small></th>
+                  <th scope="row">{event.time} EAT<small>{event.date ?? recordDate}</small></th>
                   <td>{event.actor}<small>{event.role}</small></td>
                   <td>{event.action}</td><td>{event.record}</td>
                   <td><span className="audit-result" data-result={event.result}>{event.result}</span></td>
                   <td><button type="button" aria-label={`Inspect event ${event.id}`} onClick={(e) => { opener.current = e.currentTarget; setInspection(event) }}>Inspect</button></td>
                 </tr>
               ))}
-              {!visible.length && <tr><td colSpan={6}>No sample events match your filters.</td></tr>}
+              {!visible.length && <tr><td colSpan={6}>
+                {loading ? 'Loading audit history…' : error ? <span role="alert">{error}</span>
+                  : live ? 'No recorded events match your filters.' : 'No sample events match your filters.'}
+              </td></tr>}
             </tbody>
           </table>
         </div>
-        <p className="audit-count" aria-live="polite">Showing {visible.length} of {events.length} sample events</p>
+        <p className="audit-count" aria-live="polite">Showing {visible.length} of {entries.length} {live ? 'events on this page' : 'sample events'}</p>
       </section>
-      <aside className="audit-panel audit-notice"><strong>Operational Accountability</strong><p>This is a read-only sample log. Live feeds and ledger verification are unavailable.</p></aside>
-      {inspection && <EventDrawer event={inspection} onClose={closeDrawer} onInspectIssue={onInspectIssue} />}
+      {error && <button type="button" onClick={onRetry}>Try again</button>}
+      {live && (onPrevious || onNext) && <div className="audit-actions">
+        <button type="button" onClick={onPrevious} disabled={!onPrevious}>Previous</button>
+        <button type="button" onClick={onNext} disabled={!onNext}>Next</button>
+      </div>}
+      {!live && <aside className="audit-panel audit-notice"><strong>Operational Accountability</strong><p>This is a read-only sample log. Live feeds and ledger verification are unavailable.</p></aside>}
+      {inspection && <EventDrawer live={live} event={inspection} onClose={closeDrawer} onInspectIssue={onInspectIssue} />}
     </section>
   )
 }

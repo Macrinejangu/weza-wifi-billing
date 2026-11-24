@@ -12,6 +12,7 @@ from app.api.mock_mode import require_mock_mode
 from app.api.packages import router as packages_router
 from app.api.router import router as router_status_router
 from app.api.sessions import router as sessions_router
+from app.api.routes.settings import router as settings_router
 from app.api.staff import router as staff_router
 
 from app.api.routes.customers import router as customers_router
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(staff_router)
+app.include_router(settings_router)
 app.include_router(customers_router)
 app.include_router(connection_issues_router)
 app.include_router(network_inventory_router)

@@ -47,14 +47,18 @@ export class StaffSessionError extends Error {
   }
 }
 
-async function readStaffData(path, accessToken, { signal, errorMessage, notFoundMessage }) {
+async function readStaffData(path, accessToken, { signal, errorMessage, notFoundMessage, method, body }) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
     signal,
+    ...(method ? { method, body, headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    } } : {}),
   })
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401 || (response.status === 403 && !method)) {
     throw new StaffSessionError()
   }
 
@@ -146,5 +150,28 @@ export function listStaffConnectionIssues(accessToken, { limit = 50, offset = 0,
   return readStaffData(`/api/connection-issues?${params}`, accessToken, {
     signal,
     errorMessage: 'Could not load connection issues. Please try again.',
+  })
+}
+
+export function getStaffSettings(accessToken, { signal } = {}) {
+  return readStaffData('/api/staff/settings', accessToken, {
+    signal,
+    errorMessage: 'Could not load system settings.',
+  })
+}
+
+export function updateStaffSettings(accessToken, preferences) {
+  return readStaffData('/api/staff/settings', accessToken, {
+    method: 'PUT',
+    body: JSON.stringify(preferences),
+    errorMessage: 'Could not save system settings.',
+  })
+}
+
+export function getStaffAuditHistory(accessToken, { signal, offset = 0, limit = 50 } = {}) {
+  const query = new URLSearchParams({ limit, offset })
+  return readStaffData(`/api/staff/settings/audit?${query}`, accessToken, {
+    signal,
+    errorMessage: 'Could not load the audit history.',
   })
 }
