@@ -1,4 +1,4 @@
-"""Two-connection concurrency test for callback settlement (WEZA-50).
+"""Two-connection concurrency test for callback settlement (WEZA-50, WEZA-51).
 
 Every other test runs inside one rolled-back transaction, which cannot show
 a real race. This test commits real rows, then delivers the SAME callback on
@@ -7,7 +7,15 @@ two separate database connections at the same instant.
 A barrier inside the fake status query makes the race certain: both threads
 have read the payment as 'pending' in phase 1 before either one settles.
 Only the SELECT ... FOR UPDATE in settle_payment can then prevent a double
-apply. The rows are deleted afterwards because they were really committed.
+apply.
+
+Fulfilment is replaced with a fake: this test is about settlement, and the
+real fulfilment would create session rows and call the router (tested
+elsewhere). The fake also lets us assert that fulfilment starts exactly once.
+
+The rows are deleted afterwards because they were really committed. Cleanup
+removes children before parents (foreign keys), including any session rows,
+so a failure here can never leave data that breaks other tests.
 """
 
 import os
@@ -20,9 +28,18 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.db.connection import create_database_engine
-from app.models import Package, Payment, PaymentEvent, Purchase, User
+from app.models import (
+    ActivationAttempt,
+    Package,
+    Payment,
+    PaymentEvent,
+    Purchase,
+    User,
+    WiFiSession,
+)
 from app.services.callback_processing import process_callback
 from app.services.payment_event_service import EventSource, record_received_event
+from app.services.payment_fulfilment import FulfilmentOutcome, FulfilmentResult
 
 from test_callback_processing import PAID, FakeDaraja, body
 from test_payment_settlement import make_payment, make_purchase
@@ -43,6 +60,26 @@ class BarrierDaraja(FakeDaraja):
         # both threads can arrive. A timeout fails the test, never hangs it.
         self.barrier.wait(timeout=BARRIER_TIMEOUT_SECONDS)
         return super().stk_query(checkout_request_id, timestamp)
+
+
+class FakeFulfil:
+    """Stands in for fulfil_payment: records calls, touches no router or session.
+
+    The lock matters because two threads may call this at the same time.
+    """
+
+    def __init__(self):
+        self.calls = []
+        self._lock = threading.Lock()
+
+    def __call__(self, db, payment_id):
+        with self._lock:
+            self.calls.append(payment_id)
+        return FulfilmentResult(
+            payment_id=payment_id,
+            session_id=None,
+            outcome=FulfilmentOutcome.ACTIVATED,
+        )
 
 
 @pytest.fixture
@@ -83,11 +120,22 @@ def committed(engine):
 
     yield ids
 
-    # Delete children before parents (foreign keys).
+    # Delete children before parents (foreign keys):
+    # events, attempts, sessions, payments, purchases, package, user.
     with Session(engine) as cleanup:
         cleanup.execute(delete(PaymentEvent).where(
             (PaymentEvent.payment_id == ids["payment"])
             | (PaymentEvent.id.in_(ids["events"]))
+        ))
+        cleanup.execute(delete(ActivationAttempt).where(
+            ActivationAttempt.session_id.in_(
+                select(WiFiSession.id).where(
+                    WiFiSession.payment_id == ids["payment"]
+                )
+            )
+        ))
+        cleanup.execute(delete(WiFiSession).where(
+            WiFiSession.payment_id == ids["payment"]
         ))
         cleanup.execute(delete(Payment).where(Payment.id == ids["payment"]))
         cleanup.execute(delete(Purchase).where(Purchase.id == ids["purchase"]))
@@ -96,13 +144,14 @@ def committed(engine):
         cleanup.commit()
 
 
-def deliver(engine, daraja, committed, event_id):
+def deliver(engine, daraja, committed, event_id, fulfil):
     """One callback delivery on its OWN session, so its OWN connection."""
     payload = body(committed["checkout"], receipt=committed["receipt"])
     with Session(engine) as session:
         return process_callback(
             session, daraja,
             event_id=event_id, payload=payload, raw_payload={"test": True},
+            fulfil=fulfil,
         )
 
 
@@ -116,10 +165,11 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
 
     barrier = threading.Barrier(2)
     daraja = BarrierDaraja(PAID, barrier)
+    fulfil = FakeFulfil()
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futures = [
-            pool.submit(deliver, engine, daraja, committed, event_id)
+            pool.submit(deliver, engine, daraja, committed, event_id, fulfil)
             for event_id in committed["events"]
         ]
         # .result() re-raises any exception from a thread, so a crash in
@@ -152,3 +202,6 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
         assert payment.mpesa_receipt_number == committed["receipt"]
         assert purchase.status == "paid"
         assert successful == [committed["payment"]]
+        # Only the delivery that really applied the success may start
+        # fulfilment. A duplicate must never trigger a second activation.
+        assert fulfil.calls == [committed["payment"]]
