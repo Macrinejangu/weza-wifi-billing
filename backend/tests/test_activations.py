@@ -1261,3 +1261,25 @@ def test_expiry_removes_reconnected_device_and_preserves_other_devices(monkeypat
     router_service.expire_hotspot_grant(mac, "original")
     assert user["disabled"] == "no"
     assert [entry[".id"] for entry in api.active_devices] == ["*other", "*new"]
+
+
+def test_manual_disconnect_keeps_owned_grant_enabled_for_reconnect(monkeypatch):
+    mac = "AA:BB:CC:DD:EE:FF"
+    server = "WEZA-Hotspot-Server"
+    api = FakeAPI(active_devices=[
+        {".id": "*current", "user": mac, "mac-address": mac, "server": server},
+        {".id": "*other", "user": "another-user", "server": server},
+    ])
+    api.initial_active_session_ids.clear()
+    user = {".id": "*user", "name": mac, "server": server, "comment": "WEZA grant paid", "disabled": "no"}
+    api.paths[("ip", "hotspot", "user")].append(user)
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+    monkeypatch.setattr(router_service, "router_settings", lambda: {"expected_identity": "CHR"})
+
+    with pytest.raises(router_service.RouterActivationError, match="ownership"):
+        router_service.expire_hotspot_grant(mac, "stale", keep_access=True)
+    assert len(api.active_devices) == 2
+
+    router_service.expire_hotspot_grant(mac, "paid", keep_access=True)
+    assert user["disabled"] == "no"
+    assert [entry[".id"] for entry in api.active_devices] == ["*other"]

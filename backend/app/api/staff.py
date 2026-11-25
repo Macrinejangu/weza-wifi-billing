@@ -1,14 +1,17 @@
 from datetime import UTC, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.auth import current_staff
+from app.api.auth import current_staff, require_admin
 from app.db.session import get_db
-from app.models import Payment, WiFiSession
+from app.models import AdminAuditLog, Payment, User, WiFiSession
+from app.services.access_auth import MikroTikAuthenticator, MockAuthenticator, get_access_authenticator
+from app.services.router import expire_hotspot_grant
+from app.services.session_service import lock_hotspot_device
 
 # Every route in this file needs a staff login.
 router = APIRouter(prefix="/api", tags=["Staff"], dependencies=[Depends(current_staff)])
@@ -66,6 +69,44 @@ def list_sessions(status: str | None = None, limit: int = Query(50, ge=1, le=100
     if status:
         query = query.filter_by(status=status)
     return query.order_by(WiFiSession.id.desc()).limit(limit).offset(offset).all()
+
+
+@router.post("/sessions/{session_id}/disconnect")
+def disconnect_session(
+    session_id: int, staff: User = Depends(require_admin), db: Session = Depends(get_db),
+):
+    session = db.get(WiFiSession, session_id, with_for_update=True)
+    if session is None:
+        raise HTTPException(404, "Session not found")
+    if (
+        session.status != "ACTIVE" or session.ended_at is not None
+        or not session.expires_at or session.expires_at <= datetime.now(UTC)
+        or (session.subscription and session.subscription.end_date <= datetime.now(UTC))
+    ):
+        raise HTTPException(409, "Only an active paid session can be disconnected.")
+    try:
+        authenticator = get_access_authenticator()
+        simulated = isinstance(authenticator, MockAuthenticator)
+        if isinstance(authenticator, MikroTikAuthenticator) and session.router_grant_id and session.device_mac_address:
+            lock_hotspot_device(db, session.device_mac_address)
+            expire_hotspot_grant(
+                session.device_mac_address, session.router_grant_id,
+                router_identity=session.router_identity, router_server_name=session.router_server_name,
+                keep_access=True,
+            )
+        elif not (simulated and (session.payment.raw_callback or {}).get("mock")):
+            raise HTTPException(409, "This session has no verified router grant for a safe disconnect.")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, "The router could not complete the disconnect. Check the connection before retrying.") from None
+
+    db.add(AdminAuditLog(
+        admin_id=staff.id, action="Simulated disconnect" if simulated else "Disconnected device",
+        entity_type="session", entity_id=session.id,
+    ))
+    db.commit()
+    return {"simulated": simulated}
 
 
 class OverviewRead(BaseModel):

@@ -787,8 +787,9 @@ def expire_hotspot_grant(
     *,
     router_identity: str | None = None,
     router_server_name: str | None = None,
+    keep_access: bool = False,
 ) -> None:
-    """Disable only the user tagged by this access grant, including reconnects."""
+    """Disconnect an owned hotspot grant, optionally retaining access for reconnect."""
     mac = _normalize_mac(mac_address)
     marker = f"WEZA grant {grant_id}"
     expected = router_settings()["expected_identity"]
@@ -835,7 +836,7 @@ def expire_hotspot_grant(
             raise RouterActivationError("The expired hotspot user is ambiguous")
         user = matches[0]
         if user.get("comment") != marker:
-            if str(user.get("comment", "")).startswith("WEZA grant "):
+            if not keep_access and str(user.get("comment", "")).startswith("WEZA grant "):
                 # A different grant owns this device now.
                 return
             raise RouterActivationError("Cannot verify ownership of the expired hotspot user")
@@ -843,19 +844,23 @@ def expire_hotspot_grant(
         for row in owned_connections():
             if not row.get(".id") or _normalize_mac(row.get("mac-address", "")) != mac:
                 raise RouterActivationError("Cannot verify the device on an active connection")
-        if not user.get(".id"):
-            raise RouterActivationError("The expired hotspot user has no identifier")
-        users.update(**{".id": user[".id"], "disabled": "yes"})
-        disabled = [entry for entry in users if entry.get(".id") == user[".id"]]
-        if len(disabled) != 1 or disabled[0].get("comment") != marker or (
-            disabled[0].get("disabled") not in (True, "true", "yes")
-        ):
-            raise RouterActivationError("Router did not confirm the hotspot user was disabled")
+        if not keep_access:
+            if not user.get(".id"):
+                raise RouterActivationError("The expired hotspot user has no identifier")
+            users.update(**{".id": user[".id"], "disabled": "yes"})
+            disabled = [entry for entry in users if entry.get(".id") == user[".id"]]
+            if len(disabled) != 1 or disabled[0].get("comment") != marker or (
+                disabled[0].get("disabled") not in (True, "true", "yes")
+            ):
+                raise RouterActivationError("Router did not confirm the hotspot user was disabled")
+        removed_ids = set()
         for row in owned_connections():
             if not row.get(".id") or _normalize_mac(row.get("mac-address", "")) != mac:
                 raise RouterActivationError("Cannot verify the device on an active connection")
             active.remove(row[".id"])
-        if owned_connections():
+            removed_ids.add(row[".id"])
+        remaining = owned_connections()
+        if any(not keep_access or row.get(".id") in removed_ids for row in remaining):
             raise RouterActivationError("Router did not confirm the device disconnected")
     finally:
         api.close()

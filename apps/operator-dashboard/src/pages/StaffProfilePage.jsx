@@ -76,10 +76,12 @@ function ProfileView({ operator, onSignOut, staff }) {
               </label>
             </div>
             {profileNotice && <p role="status">{profileNotice}</p>}
-            <div className="staff-profile-actions">
-              <button type="button" disabled={live || !dirty} onClick={() => { setDraft(saved); setProfileNotice('') }}>Cancel</button>
-              <button type="submit" disabled={live || !dirty} className="staff-profile-primary">Save Changes</button>
-            </div>
+            {live ? <p>Staff profile details are read-only.</p> : (
+              <div className="staff-profile-actions">
+                <button type="button" disabled={!dirty} onClick={() => { setDraft(saved); setProfileNotice('') }}>Cancel</button>
+                <button type="submit" disabled={!dirty} className="staff-profile-primary">Save Changes</button>
+              </div>
+            )}
           </form>
 
           <section className="staff-profile-card">
@@ -96,31 +98,31 @@ function ProfileView({ operator, onSignOut, staff }) {
               ))}
             </ul>
             {sessionNotice && <p role="status">{sessionNotice}</p>}
-            <div className="staff-profile-actions">
+            {!live && <div className="staff-profile-actions">
               <button type="button" className="staff-profile-danger" disabled={!otherSessions.length} onClick={() => {
                 setSessions((current) => current.filter((session) => session.id === 'current'))
                 setSessionNotice('Other sample sessions removed from this view.')
               }}>Sign Out of Other Sessions</button>
-            </div>
+            </div>}
           </section>
         </div>
 
         <div className="staff-profile-stack">
           <section className="staff-profile-card">
             <div className="staff-profile-card-heading"><h2>Password &amp; Key</h2><span className="staff-profile-chip">Unavailable</span></div>
-            <div className="staff-profile-fields">
+            {!live && <div className="staff-profile-fields">
               <label className="staff-profile-wide">Current Password<input type="password" disabled autoComplete="off" /></label>
               <label className="staff-profile-wide">New Password<input type="password" disabled autoComplete="off" /></label>
               <label className="staff-profile-wide">Confirm New Password<input type="password" disabled autoComplete="off" /></label>
-            </div>
+            </div>}
             <p>{live ? 'Password changes are currently unavailable.' : 'Password changes require an authenticated staff account.'}</p>
-            <div className="staff-profile-actions"><button type="button" disabled>Update Password</button></div>
+            {!live && <div className="staff-profile-actions"><button type="button" disabled>Update Password</button></div>}
           </section>
 
           <section className="staff-profile-card">
             <div className="staff-profile-card-heading"><h2>Two-Factor Auth</h2><span className="staff-profile-chip">{live ? 'Unavailable' : 'Demo'}</span></div>
             <div className="staff-profile-security-tile"><strong>Authenticator App</strong><p>{live ? 'Authenticator setup is currently unavailable.' : 'Sample enrollment. Verification and recovery are unavailable in the preview.'}</p></div>
-            <div className="staff-profile-actions"><button type="button" disabled>Manage 2FA</button></div>
+            {!live && <div className="staff-profile-actions"><button type="button" disabled>Manage 2FA</button></div>}
           </section>
 
           <section className="staff-profile-card staff-profile-card-heading">

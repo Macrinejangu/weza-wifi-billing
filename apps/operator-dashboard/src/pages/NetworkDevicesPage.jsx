@@ -144,7 +144,7 @@ function DeviceDetails({ device, opener, onClose, live }) {
         <footer>
           <p>{live ? 'Device diagnostics are unavailable.' : 'Diagnostics are unavailable in demo mode.'}</p>
           <div className="network-device-actions">
-            <button type="button" disabled>Run Ping Test</button>
+            {!live && <button type="button" disabled>Run Ping Test</button>}
             <button type="button" className="network-device-primary" onClick={onClose}>Close Drawer</button>
           </div>
         </footer>
@@ -233,8 +233,10 @@ function NetworkInventory({ accessToken, onSignOut }) {
           {live ? (
             <button type="button" className="network-device-primary" disabled={inventory.loading} onClick={refresh}>Refresh</button>
           ) : <span className="network-fixed-label">Fixed snapshot</span>}
-          <button type="button" className="network-ping-sweep" disabled>Run Ping Sweep</button>
-          <button type="button" disabled>Sync Gateway State</button>
+          {!live && <>
+            <button type="button" className="network-ping-sweep" disabled>Run Ping Sweep</button>
+            <button type="button" disabled>Sync Gateway State</button>
+          </>}
         </div>
       </div>
       {!live && <p className="network-device-demo"><strong>Demo data.</strong> This inventory is a fixed sample. Live sync and diagnostics are unavailable.</p>}

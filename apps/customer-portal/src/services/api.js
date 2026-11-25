@@ -129,3 +129,11 @@ export function registerCustomer({ fullName, email, phone, password }) {
 export function listSupportFaqs(signal) {
   return apiRequest('/api/support/faqs', { cache: 'no-store', signal })
 }
+
+export function askWezaAssist(messages) {
+  return apiRequest('/api/support/assist', {
+    method: 'POST',
+    cache: 'no-store',
+    body: JSON.stringify({ messages }),
+  })
+}

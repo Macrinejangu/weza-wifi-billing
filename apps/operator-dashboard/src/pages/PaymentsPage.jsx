@@ -303,9 +303,9 @@ function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue, onOp
   )
 }
 
-export default function PaymentsPage({ accessToken, onSignOut, onInspectIssue, onOpenProfile }) {
+export default function PaymentsPage({ accessToken, onSignOut, onInspectIssue, onOpenProfile, isAdmin = false }) {
   return accessToken || demoDataEnabled ? (
-    <PaymentsView accessToken={accessToken} onSignOut={onSignOut} onInspectIssue={onInspectIssue} onOpenProfile={onOpenProfile} />
+    <PaymentsView accessToken={accessToken} onSignOut={onSignOut} onInspectIssue={onInspectIssue} onOpenProfile={onOpenProfile} isAdmin={isAdmin} />
   ) : (
     <section className="payment-monitor-page">
       <h1>Payments</h1>
@@ -314,7 +314,7 @@ export default function PaymentsPage({ accessToken, onSignOut, onInspectIssue, o
   )
 }
 
-function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile }) {
+function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile, isAdmin }) {
   const live = Boolean(accessToken)
   const [page, setPage] = useState(0)
   const [reload, setReload] = useState(0)
@@ -372,15 +372,15 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile })
       item.paymentStatus, item.provisioningStatus, item.package, item.time,
     ])
     const csv = [headings, ...rows]
-      .map((row) => row.map((value) => `"${String(typeof value === 'string' && /^[=+@\-]/.test(value) ? "'" + value : value).replaceAll('"', '""')}"`).join(','))
+      .map((row) => row.map((value) => `"${String(typeof value === 'string' && /^[\s\uFEFF]*[=+@\-]|^[\t\r\n]/.test(value) ? "'" + value : (value ?? '')).replaceAll('"', '""')}"`).join(','))
       .join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = 'weza-payment-demo-transactions.csv'
+    link.download = live ? 'weza-payments-page.csv' : 'weza-payment-demo-transactions.csv'
     link.click()
     URL.revokeObjectURL(url)
-    setNotice('Demo transaction CSV exported.')
+    setNotice(live ? 'Payments on this page exported.' : 'Demo transaction CSV exported.')
   }
 
   const packages = [...new Set(initialTransactions.map((item) => item.package))]
@@ -400,14 +400,14 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile })
         </div>
         <div className="payment-monitor-heading-actions">
           {live && <button type="button" className="payment-secondary-button" disabled={liveList.loading} onClick={() => changeList(page)}>Refresh</button>}
-          <button type="button" className="payment-secondary-button" disabled={live} onClick={() => setNotice('Manual STK is a preview only. No payment prompt was sent.')}>
+          {!live && <button type="button" className="payment-secondary-button" onClick={() => setNotice('Manual STK is a preview only. No payment prompt was sent.')}>
             <span className="material-symbols-outlined" aria-hidden="true">sensors</span>Manual STK
-          </button>
+          </button>}
           <button type="button" className="payment-secondary-button" aria-expanded={showFilterRules} aria-controls="payment-filter-rules" onClick={() => setShowFilterRules(!showFilterRules)}>
             <span className="material-symbols-outlined" aria-hidden="true">tune</span>Filter Rules
           </button>
-          <button type="button" className="payment-secondary-button" onClick={exportCsv} disabled={live || !visibleTransactions.length}>
-            <span className="material-symbols-outlined" aria-hidden="true">download</span>Export CSV
+          <button type="button" className="payment-secondary-button" onClick={exportCsv} disabled={(live && !isAdmin) || !visibleTransactions.length}>
+            <span className="material-symbols-outlined" aria-hidden="true">download</span>{live ? 'Export this page' : 'Export CSV'}
           </button>
         </div>
       </div>
@@ -443,10 +443,10 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile })
               <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={live ? 'Search this page by reference, phone or ID' : 'Search receipt, phone, or customer'} aria-label="Search payments" />
             </label>
             {!live && <span className="payment-monitor-date">{sampleDate} · EAT</span>}
-            <select disabled={live} value={selectedPackage} onChange={(event) => setSelectedPackage(event.target.value)} aria-label="Filter payments by package">
+            {!live && <select value={selectedPackage} onChange={(event) => setSelectedPackage(event.target.value)} aria-label="Filter payments by package">
               <option value="">All Packages</option>
               {!live && packages.map((name) => <option key={name}>{name}</option>)}
-            </select>
+            </select>}
           </div>
         </div>
         <div className="payment-monitor-filter-rules" id="payment-filter-rules" hidden={!showFilterRules}>
