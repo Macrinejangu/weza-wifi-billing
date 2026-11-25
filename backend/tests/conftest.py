@@ -11,6 +11,19 @@ from app.main import app
 from app.models import Package, User
 
 
+@pytest.fixture(autouse=True)
+def router_mode_mock(monkeypatch):
+    """Run every test against the mock router unless the test says otherwise.
+
+    get_access_authenticator() refuses to start unless ROUTER_MODE is exactly
+    'mock' or 'mikrotik' (fail closed). CI exported it, so the suite only
+    passed where that variable happened to be set. Setting it here makes the
+    suite pass on any machine. Tests that need another mode call
+    monkeypatch.setenv themselves, which runs later and wins.
+    """
+    monkeypatch.setenv("ROUTER_MODE", "mock")
+
+
 @pytest.fixture
 def test_database():
     if not os.getenv("TEST_DATABASE_URL"):
