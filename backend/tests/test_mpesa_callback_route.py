@@ -20,11 +20,13 @@ from app.api.routes.mpesa_callback import (
 )
 from app.api.routes.payments import get_daraja_client
 from app.db.session import get_db
+from app.integrations.mpesa.stk_query import StkQueryOutcome, StkQueryResult
 from app.main import app
 from app.models import ActivationAttempt, Payment, PaymentEvent, Subscription, WiFiSession
 from app.payments.callback_ip_policy import CallbackIpPolicy
 from app.payments.callback_security import CallbackSecurityPolicy
 from app.services.callback_processing import replay_callback
+from app.services.query_settlement import settle_from_query
 
 from test_callback_processing import PAID, UNKNOWN, FakeDaraja, body
 from test_payment_settlement import make_payment, make_purchase
@@ -111,6 +113,36 @@ def test_duplicate_delivery_settles_once_and_queries_once(api, db, pending, dara
     assert subscription.end_date == session.expires_at == payment.paid_at + timedelta(
         minutes=payment.purchase.duration_minutes
     )
+    assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
+
+
+def test_query_recovery_keeps_paid_time_after_repeat_and_late_callback(api, db, pending):
+    _, payment = pending
+    payment_id = payment.id
+    paid_result = StkQueryResult(StkQueryOutcome.PAID, result_code=0)
+
+    settle_from_query(db, payment_id=payment_id, query_result=paid_result)
+    paid_at = payment.paid_at
+    subscription = db.query(Subscription).filter_by(payment_id=payment_id).one()
+    subscription_id = subscription.id
+    assert subscription.start_date == paid_at
+    expires_at = paid_at + timedelta(minutes=payment.purchase.duration_minutes)
+    assert subscription.end_date == expires_at
+
+    settle_from_query(db, payment_id=payment_id, query_result=paid_result)
+    assert post(api, json.dumps(body())).json() == ACCEPTED_REPLY
+
+    assert [(event.source, event.processing_status) for event in events(db)] == [
+        ("query", "applied"),
+        ("query", "duplicate"),
+        ("callback", "duplicate"),
+    ]
+    subscription = db.query(Subscription).filter_by(payment_id=payment_id).one()
+    session = db.query(WiFiSession).filter_by(payment_id=payment_id).one()
+    assert subscription.id == session.subscription_id == subscription_id
+    assert payment.paid_at == subscription.start_date == session.started_at == paid_at
+    assert subscription.end_date == session.expires_at == expires_at
+    assert session.activation_status == "succeeded"
     assert db.query(ActivationAttempt).filter_by(session_id=session.id).count() == 1
 
 

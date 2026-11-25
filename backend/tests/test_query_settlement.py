@@ -77,6 +77,10 @@ def test_paid_query_settles_and_starts_fulfilment(db, pending):
     assert event.source == "query"
     assert event.processing_status == "applied"
     assert event.payload["origin"] == QUERY_ORIGIN
+    assert event.error_message == (
+        "Paid time starts at verification because the status query "
+        "has no transaction timestamp."
+    )
 
 
 def test_repeat_paid_query_is_a_duplicate_and_fulfils_once(db, pending):
@@ -167,4 +171,3 @@ def test_fulfilment_crash_does_not_undo_the_payment(db, pending):
     assert result.action is SettlementAction.APPLY_SUCCESS
     assert result.fulfilment is FulfilmentOutcome.UNEXPECTED_ERROR
     assert reload(db, Payment, payment_id).status == "successful"
-    

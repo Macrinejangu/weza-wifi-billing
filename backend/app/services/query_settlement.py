@@ -165,6 +165,11 @@ def _settle_under_lock(
         conflict = _apply_success(db, payment, query_result)
         if conflict is not None:
             action, note = SettlementAction.REJECT, conflict
+        else:
+            note = (
+                "Paid time starts at verification because the status query "
+                "has no transaction timestamp."
+            )
     elif action is SettlementAction.ALREADY_SETTLED:
         note = f"status query repeat; payment already {payment.status}"
     else:
@@ -222,4 +227,3 @@ def _fulfil_safely(db: Session, fulfil: Fulfiller, payment_id: int) -> Fulfilmen
     except Exception:
         logger.exception("fulfilment raised past its guard: payment_id=%s", payment_id)
         return FulfilmentOutcome.UNEXPECTED_ERROR
-    

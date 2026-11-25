@@ -20,7 +20,7 @@ A status check reports one of `settled`, `already_settled`, `still_pending`, `re
 ## How a status query settles a payment
 
 - Only a PAID answer settles the payment. FAILED, unknown and Daraja errors leave it `pending`.
-- The query reply carries no amount, phone number or receipt. A payment settled this way has no M-Pesa receipt number and no callback time. `paid_at` is the moment we confirmed it.
+- The query reply carries no amount, phone number, receipt or transaction timestamp. A payment settled this way has no M-Pesa receipt number or callback time. `paid_at` is the moment Weza first verified the payment. The applied event records why this time was used. Repeat checks and late payment replies preserve it.
 - Fulfilment then runs as for a callback. It needs `ROUTER_MODE` set to `mock` or `mikrotik`. In MikroTik mode the purchase must also have a verified device MAC address.
 - This differs from `python -m app.recheck_mpesa_payment`, which records a PAID query but leaves the payment pending.
 
