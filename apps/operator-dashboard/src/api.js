@@ -118,10 +118,11 @@ export async function listActivePackages({ signal } = {}) {
 }
 
 
-export function listStaffCustomers(accessToken, { limit = 50, offset = 0, status, query, signal } = {}) {
+export function listStaffCustomers(accessToken, { limit = 50, offset = 0, status, query, registeredOn, signal } = {}) {
   const params = new URLSearchParams({ limit, offset })
   if (status) params.set('status', status)
   if (query) params.set('q', query)
+  if (registeredOn) params.set('registered_on', registeredOn)
   return readStaffData(`/api/customers?${params}`, accessToken, {
     signal,
     errorMessage: 'Could not load customers. Please try again.',
@@ -216,5 +217,20 @@ export function updateSupportFaq(accessToken, id, fields) {
     method: 'PUT',
     body: JSON.stringify(fields),
     errorMessage: 'Could not save the support answer. Please try again.',
+  })
+}
+
+export function saveStaffCustomer(accessToken, id, fields) {
+  return readStaffData(id ? `/api/customers/${id}` : '/api/customers', accessToken, {
+    method: id ? 'PUT' : 'POST',
+    body: JSON.stringify(fields),
+    errorMessage: 'Could not save the customer. Check the details and whether the email or number is already used.',
+  })
+}
+
+export function disconnectStaffSession(accessToken, id) {
+  return readStaffData(`/api/sessions/${id}/disconnect`, accessToken, {
+    method: 'POST',
+    errorMessage: 'Could not disconnect this session. Check its status and router connection.',
   })
 }

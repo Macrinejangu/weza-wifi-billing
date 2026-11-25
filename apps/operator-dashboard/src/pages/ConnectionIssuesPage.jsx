@@ -289,7 +289,7 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
               <section className="connection-issue-panel">
                 <h2>Resolution &amp; Closure</h2>
                 {selected.resolution && <><strong>{selected.resolution.category}</strong><p>{selected.resolution.note}</p></>}
-                {live && <button type="button" className="connection-issue-primary" disabled>Mark as Resolved</button>}
+                {live && <p>When access is confirmed, this case drops out of the open list.</p>}
                 {!live && selected.status !== 'Resolved' && (
                   <div className="connection-issue-stack">
                     <label>Recorded Resolution Reason

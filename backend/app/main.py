@@ -14,6 +14,7 @@ from app.api.router import router as router_status_router
 from app.api.sessions import router as sessions_router
 from app.api.routes.settings import router as settings_router
 from app.api.routes.support import router as support_router
+from app.api.routes.assist import router as assist_router
 from app.api.staff import router as staff_router
 
 from app.api.routes.customers import router as customers_router
@@ -38,6 +39,7 @@ app.include_router(auth_router)
 app.include_router(staff_router)
 app.include_router(settings_router)
 app.include_router(support_router)
+app.include_router(assist_router)
 app.include_router(customers_router)
 app.include_router(connection_issues_router)
 app.include_router(network_inventory_router)

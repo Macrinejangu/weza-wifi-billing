@@ -36,6 +36,35 @@ function button(label, scope = container) {
   return result
 }
 
+test('only the administrator can confirm a disconnect from session details', async () => {
+  const period = new Date().toISOString()
+  const record = {
+    id: 42, payment_id: 22, user_id: 7, package_id: 1, status: 'ACTIVE',
+    activation_status: 'succeeded', started_at: period, expires_at: period,
+  }
+  const fetcher = vi.fn(async (url) => ({
+    ok: true,
+    json: async () => url.endsWith('/disconnect') ? { simulated: true }
+      : url.startsWith('/api/sessions?') ? [record] : { status: 'successful' },
+  }))
+  vi.stubGlobal('fetch', fetcher)
+  await act(async () => root.render(<SessionsPage accessToken="operator-token" />))
+  await act(async () => button('Inspect session for Customer #7').click())
+  expect(container.textContent).not.toContain('Disconnect device')
+  click(button('Close session details'))
+
+  await act(async () => root.render(<SessionsPage accessToken="admin-token" isAdmin />))
+  await act(async () => button('Inspect session for Customer #7').click())
+  click(button('Disconnect device'))
+  expect(fetcher.mock.calls.some(([url]) => url.endsWith('/disconnect'))).toBe(false)
+  await act(async () => button('Confirm disconnect').click())
+  expect(fetcher).toHaveBeenCalledWith('/api/sessions/42/disconnect', expect.objectContaining({
+    method: 'POST',
+    headers: expect.objectContaining({ Authorization: 'Bearer admin-token' }),
+  }))
+  expect(container.textContent).toContain('The customer keeps their paid time.')
+})
+
 function click(element) {
   act(() => element.click())
 }
