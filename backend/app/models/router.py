@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base, TimestampMixin
@@ -17,6 +17,8 @@ class Router(TimestampMixin, Base):
     host = Column(String(255), nullable=False, unique=True)
 
     identity = Column(String(100), nullable=True)
+    hotspot_enabled = Column(Boolean)
+    last_synced_at = Column(DateTime(timezone=True))
 
     status = Column(
         String(20),

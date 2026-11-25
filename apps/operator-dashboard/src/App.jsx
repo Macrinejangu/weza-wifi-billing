@@ -117,7 +117,7 @@ export default function App() {
         ) : staffPage === 'customers' ? (
           <CustomersPage accessToken={accessToken} onSignOut={signOut} isAdmin={staff.role === "admin"} />
         ) : staffPage === 'network-devices' ? (
-          <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} />
+          <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} isAdmin={staff.role === "admin"} />
         ) : staffPage === 'connection-issues' ? (
           <ConnectionIssuesPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'settings' ? (

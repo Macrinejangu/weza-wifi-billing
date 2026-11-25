@@ -47,7 +47,7 @@ export class StaffSessionError extends Error {
   }
 }
 
-async function readStaffData(path, accessToken, { signal, errorMessage, notFoundMessage, method, body }) {
+async function readStaffData(path, accessToken, { signal, errorMessage, notFoundMessage, method, body, useDetail }) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     cache: 'no-store',
@@ -67,7 +67,8 @@ async function readStaffData(path, accessToken, { signal, errorMessage, notFound
   }
 
   if (!response.ok) {
-    throw new Error(errorMessage)
+    const data = useDetail && await response.json().catch(() => null)
+    throw new Error(typeof data?.detail === 'string' ? data.detail : errorMessage)
   }
 
   return response.json()
@@ -232,5 +233,30 @@ export function disconnectStaffSession(accessToken, id) {
   return readStaffData(`/api/sessions/${id}/disconnect`, accessToken, {
     method: 'POST',
     errorMessage: 'Could not disconnect this session. Check its status and router connection.',
+  })
+}
+
+export function listManualStkPurchases(accessToken, { signal } = {}) {
+  return readStaffData('/api/staff/manual-stk/purchases', accessToken, {
+    signal, errorMessage: 'Could not load eligible purchases.',
+  })
+}
+
+export function sendManualStk(accessToken, purchase) {
+  return readStaffData('/api/staff/manual-stk', accessToken, {
+    method: 'POST', body: JSON.stringify({ purchase_id: purchase.id, phone: purchase.phone }),
+    useDetail: true, errorMessage: 'Could not send this prompt. Check its payment status before retrying.',
+  })
+}
+
+export function runPingSweep(accessToken) {
+  return readStaffData('/api/network/ping-sweep', accessToken, {
+    method: 'POST', useDetail: true, errorMessage: 'Could not check device reachability.',
+  })
+}
+
+export function syncGatewayState(accessToken) {
+  return readStaffData('/api/network/sync-gateway', accessToken, {
+    method: 'POST', useDetail: true, errorMessage: 'Could not sync the gateway. The last successful reading is unchanged.',
   })
 }
