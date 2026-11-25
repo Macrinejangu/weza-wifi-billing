@@ -1,8 +1,11 @@
 """Staff routes for paid customers who are not connected (WEZA-63).
 
 All routes need a staff login and are NOT behind mock mode, so they work with
-real payments. Nothing here contacts Daraja: the finder only reads, and a retry
-only asks the router again (see app/services/activation_retry.py).
+real payments. The list and retry routes never contact Daraja: the finder only
+reads, and a retry only asks the router again (see
+app/services/activation_retry.py). The check-payment route sends ONE status
+query to Safaricom (never a payment request) and settles the payment only if
+Safaricom answers PAID (see app/services/payment_status_check.py).
 
 Responses never carry raw router text, phone numbers or exception wording.
 """
@@ -17,11 +20,14 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.auth import current_staff
+from app.api.routes.payments import get_daraja_client
 from app.db.session import get_db
+from app.integrations.mpesa.client import DarajaClient
 from app.models import User
 from app.services.access_auth import MikroTikAuthenticator, get_access_authenticator
 from app.services.activation_recovery import find_unresolved_cases, get_case
 from app.services.activation_retry import RetryRefused, retry_activation
+from app.services.payment_status_check import PaymentNotCheckable, check_payment
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +63,15 @@ class RetryOut(BaseModel):
     outcome: str
     reason_before: str
     audit_id: int
+
+
+class CheckOut(BaseModel):
+    payment_id: int
+    outcome: str
+    payment_status: str
+    # What Safaricom answered ("paid", "failed", "unknown"); None if no answer.
+    query_outcome: str | None
+    fulfilment: str | None
 
 
 def get_require_device() -> bool:
@@ -143,4 +158,55 @@ def retry_case(
         outcome=result.outcome.value,
         reason_before=result.reason_before.value,
         audit_id=result.audit_id,
+    )
+
+
+@router.post(
+    "/cases/{payment_id}/check-payment",
+    response_model=CheckOut,
+    responses={
+        404: {"description": "Payment not found"},
+        409: {"description": "Payment is not pending, or has no M-Pesa request to check"},
+        503: {"description": "Daraja is not configured, or the database is unavailable"},
+    },
+)
+def check_payment_case(
+    response: Response,
+    payment_id: int = Path(ge=1),
+    staff: User = Depends(current_staff),
+    daraja: DarajaClient | None = Depends(get_daraja_client),
+    db: Session = Depends(get_db),
+):
+    """Ask Safaricom what happened to one pending payment.
+
+    Sends one status query, never a payment request. Only a PAID answer
+    changes anything. A check that ran returns 200 with its outcome, including
+    "no_answer" when Daraja could not be reached and "still_pending" when
+    Safaricom said failed or unknown: the payment is left for staff to review.
+    LookupError (unknown payment) becomes a 404 in main.py.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    if daraja is None:
+        return JSONResponse(
+            {"detail": "M-Pesa checks are not configured.", "code": "daraja_not_configured"},
+            status_code=503,
+        )
+    try:
+        result = check_payment(db, daraja, payment_id, staff_id=staff.id)
+    except PaymentNotCheckable as refused:
+        return JSONResponse(
+            {"detail": refused.message, "code": refused.code}, status_code=409
+        )
+    except OperationalError as error:
+        logger.error("database unavailable during payment check: %s", type(error).__name__)
+        return JSONResponse(
+            {"detail": "Recovery is temporarily unavailable.", "code": "service_unavailable"},
+            status_code=503,
+        )
+    return CheckOut(
+        payment_id=result.payment_id,
+        outcome=result.outcome.value,
+        payment_status=result.payment_status,
+        query_outcome=result.query_outcome,
+        fulfilment=result.fulfilment.value if result.fulfilment else None,
     )
