@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
-import { listActivePackages } from '../api.js'
+import { listActivePackages, listStaffPackages, StaffSessionError } from '../api.js'
+import StaffPackageDialog from './StaffPackageDialog.jsx'
 import '../styles/packages.css'
 
 function toCatalogueRow(record) {
@@ -11,6 +12,7 @@ function toCatalogueRow(record) {
 
   return {
     id: String(record.id),
+    record,
     name: record.name,
     category,
     price: record.price,
@@ -249,8 +251,9 @@ function PackageFilters({ label, options, selected, onSelect }) {
   )
 }
 
-export default function PackagesPage({ live = false }) {
+export default function PackagesPage({ live = false, accessToken, canManage = false, onSignOut }) {
   const showDemo = !live && demoDataEnabled
+  const editable = showDemo || (live && canManage && Boolean(accessToken))
   const [packages, setPackages] = useState(() => showDemo ? demoPackages : [])
   const [request, setRequest] = useState({ loading: live })
   const [reload, setReload] = useState(0)
@@ -259,16 +262,18 @@ export default function PackagesPage({ live = false }) {
     if (!live) return undefined
     const controller = new AbortController()
     const { signal } = controller
-    listActivePackages({ signal }).then((records) => {
+    const catalogue = accessToken ? listStaffPackages(accessToken, { signal }) : listActivePackages({ signal })
+    catalogue.then((records) => {
       if (signal.aborted) return
-      setPackages(records.filter((record) => record.is_active === true).map(toCatalogueRow))
+      setPackages(records.map(toCatalogueRow))
       setRequest({ loading: false })
-    }).catch(() => {
+    }).catch((error) => {
       if (signal.aborted) return
+      if (error instanceof StaffSessionError) onSignOut?.()
       setRequest({ loading: false, error: 'Could not load packages. Please try again.' })
     })
     return () => controller.abort()
-  }, [live, reload])
+  }, [accessToken, live, onSignOut, reload])
 
   function refreshCatalogue() {
     setRequest({ loading: true })
@@ -288,7 +293,7 @@ export default function PackagesPage({ live = false }) {
   const activeCount = packages.filter((item) => item.status === 'Active').length
   const statusOptions = [
     { value: 'all', text: `All (${packages.length})` },
-    ...(live ? ['Active'] : statuses).map((value) => ({
+    ...(live && !accessToken ? ['Active'] : statuses).map((value) => ({
       value,
       text: `${value} (${value === 'Active' ? activeCount : packages.length - activeCount})`,
     })),
@@ -302,7 +307,7 @@ export default function PackagesPage({ live = false }) {
   )
 
   function openDialog(packageItem, trigger) {
-    if (!showDemo) return
+    if (!editable) return
     triggerRef.current = trigger
     setDialog({ packageItem })
   }
@@ -333,9 +338,9 @@ export default function PackagesPage({ live = false }) {
       <header className="page-heading packages-heading">
         <div>
           <div className="package-title"><h1>Packages</h1><span>Tariff Engine</span></div>
-          <p className="page-description">{live ? 'Review the active packages offered in the customer portal.' : 'Create and manage available internet packages, captive tiers, and rate limit quotas.'}</p>
+          <p className="page-description">{live ? 'Review the packages offered in the customer portal.' : 'Create and manage available internet packages, captive tiers, and rate limit quotas.'}</p>
         </div>
-        <button type="button" className="package-primary-button package-create-button" disabled={!showDemo} onClick={(event) => openDialog(null, event.currentTarget)}>
+        <button type="button" className="package-primary-button package-create-button" disabled={!editable || request.loading || Boolean(request.error)} onClick={(event) => openDialog(null, event.currentTarget)}>
           <span className="material-symbols-outlined" aria-hidden="true">add</span>
           Add Package
         </button>
@@ -379,7 +384,7 @@ export default function PackagesPage({ live = false }) {
               </tr>
             </thead>
             <tbody>
-              {visiblePackages.map((item) => <PackageRow key={item.id} item={item} onEdit={openDialog} editable={showDemo} />)}
+              {visiblePackages.map((item) => <PackageRow key={item.id} item={item} onEdit={openDialog} editable={editable} />)}
               {visiblePackages.length === 0 && (
                 <tr>
                   <td colSpan={7} className="package-empty">
@@ -388,7 +393,7 @@ export default function PackagesPage({ live = false }) {
                         <p role="alert">{request.error}</p>
                         <button type="button" className="package-primary-button" onClick={refreshCatalogue}>Retry</button>
                       </>
-                    ) : live && packages.length === 0 ? 'No active packages are available.'
+                    ) : live && packages.length === 0 ? 'No packages are available.'
                       : !live && !showDemo ? 'Package records unavailable.'
                       : 'No matching packages. Try another search or filter.'}
                   </td>
@@ -399,11 +404,15 @@ export default function PackagesPage({ live = false }) {
         </div>
         <footer className="package-table-footer">
           <span role="status">{!request.loading && !request.error && `Showing ${visiblePackages.length} of ${packages.length} packages`}</span>
-          {live && <span>Active catalog · Editing unavailable</span>}
+          {live && !editable && <span>Only administrators manage packages.</span>}
           {showDemo && <span>Demo data · Changes are temporary</span>}
         </footer>
       </section>
 
+      {live && editable && dialog && (
+        <StaffPackageDialog packageRecord={dialog.packageItem?.record} accessToken={accessToken}
+          onClose={closeDialog} onSaved={(record) => savePackage(toCatalogueRow(record))} onSignOut={onSignOut} />
+      )}
       {showDemo && dialog && (
         <PackageDialog packageItem={dialog.packageItem} onClose={closeDialog} onSave={savePackage} />
       )}

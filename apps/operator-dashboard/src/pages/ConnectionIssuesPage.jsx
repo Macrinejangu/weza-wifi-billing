@@ -421,7 +421,7 @@ function ConnectionIssuesView({ initialIssueId, accessToken, onSignOut }) {
 
       <aside className="connection-issue-panel">
         <strong>Operational Guardrail</strong>
-        <p>{live ? 'Retry and resolution are unavailable in this view.' : 'Retrying activation uses the existing payment. Paid time begins when the network confirms access.'}</p>
+        <p>{live ? 'Retry uses the confirmed payment. Record any further follow-up with your support lead.' : 'Retrying activation uses the existing payment. Paid time begins when payment is confirmed.'}</p>
       </aside>
     </section>
   )

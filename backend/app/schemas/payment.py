@@ -17,6 +17,14 @@ from pydantic import BaseModel, Field, field_validator
 _KENYAN_MOBILE = re.compile(r"(?:\+?254|0)([17][0-9]{8})")
 
 
+
+def normalise_kenyan_mobile(value: str) -> str:
+    match = _KENYAN_MOBILE.fullmatch(value.strip().replace(" ", ""))
+    if match is None:
+        raise ValueError("Enter a valid Kenyan mobile number, e.g. 0712345678.")
+    return f"254{match.group(1)}"
+
+
 class PaymentRequest(BaseModel):
     """Body of the request that starts an M-Pesa payment for a purchase.
 
@@ -31,13 +39,10 @@ class PaymentRequest(BaseModel):
     @classmethod
     def normalise_phone_number(cls, value: str) -> str:
         """Reject malformed numbers and convert valid ones to 254XXXXXXXXX."""
-        cleaned = value.strip().replace(" ", "")
-        match = _KENYAN_MOBILE.fullmatch(cleaned)
-        if match is None:
-            raise ValueError("Enter a valid Safaricom mobile number, e.g. 0712345678.")
-        return f"254{match.group(1)}"
-
-
+        try:
+            return normalise_kenyan_mobile(value)
+        except ValueError:
+            raise ValueError("Enter a valid Safaricom mobile number, e.g. 0712345678.") from None
 
 class PaymentInitiated(BaseModel):
     """Response when Daraja accepted the push and the customer was prompted.

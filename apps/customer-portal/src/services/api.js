@@ -118,3 +118,14 @@ export function getCustomerProfile(accessToken) {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
 }
+
+export function registerCustomer({ fullName, email, phone, password }) {
+  return apiRequest('/api/auth/customer/register', {
+    method: 'POST',
+    body: JSON.stringify({ full_name: fullName, email, phone, password }),
+  })
+}
+
+export function listSupportFaqs(signal) {
+  return apiRequest('/api/support/faqs', { cache: 'no-store', signal })
+}

@@ -182,3 +182,39 @@ export function getStaffAuditHistory(accessToken, { signal, offset = 0, limit = 
     errorMessage: 'Could not load the audit history.',
   })
 }
+
+export function listStaffPackages(accessToken, { signal } = {}) {
+  return readStaffData('/api/packages/staff', accessToken, {
+    signal, errorMessage: 'Could not load packages. Please try again.',
+  })
+}
+
+export function saveStaffPackage(accessToken, packageId, fields) {
+  const path = packageId ? `/api/packages/${packageId}` : '/api/packages/'
+  return readStaffData(path, accessToken, {
+    method: packageId ? 'PUT' : 'POST',
+    body: JSON.stringify(fields),
+    errorMessage: 'Could not save the package. Check the details and try again.',
+  })
+}
+
+export function deactivateStaffPackage(accessToken, packageId) {
+  return readStaffData(`/api/packages/${packageId}`, accessToken, {
+    method: 'DELETE',
+    errorMessage: 'Could not deactivate the package. Please try again.',
+  })
+}
+
+export function listSupportFaqs(accessToken, { signal } = {}) {
+  return readStaffData('/api/support/faqs', accessToken, {
+    signal, errorMessage: 'Could not load support answers. Please try again.',
+  })
+}
+
+export function updateSupportFaq(accessToken, id, fields) {
+  return readStaffData(`/api/support/faqs/${id}`, accessToken, {
+    method: 'PUT',
+    body: JSON.stringify(fields),
+    errorMessage: 'Could not save the support answer. Please try again.',
+  })
+}

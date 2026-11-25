@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { getStaffSettings, StaffSessionError, updateStaffSettings } from '../api.js'
+import SupportFaqSettings from './SupportFaqSettings.jsx'
 import '../styles/system-settings.css'
 
 const sections = [
@@ -217,57 +218,60 @@ function LiveSystemSettings({ accessToken, onSignOut, onOpenAuditHistory }) {
   }
 
   return (
-    <form className="system-settings-page" onSubmit={save}>
-      <header className="page-heading system-settings-heading">
-        <div><h1>System Settings</h1><p>Console preferences, integration configuration, and staff access.</p></div>
-        {canEdit && <div className="system-settings-actions">
-          <button type="button" onClick={onOpenAuditHistory}>Audit History</button>
-          <button type="submit" className="system-settings-primary" disabled={!dirty || saving}>
-            {saving ? 'Saving…' : 'Save Changes'}
-          </button>
-        </div>}
-      </header>
-      {error && <p role="alert" className="system-settings-feedback">{error}</p>}
-      {notice && <p role="status" className="system-settings-feedback">{notice}</p>}
-      {!settings && (
-        error ? <button type="button" onClick={() => { setError(''); setAttempt(attempt + 1) }}>Try again</button>
-          : <p role="status">Loading system settings…</p>
-      )}
-      {settings && draft && <>
-        <section className="system-settings-panel" aria-label="General preferences">
-          <header><h2>General Preferences</h2><p>{canEdit ? 'Store the console name and maintenance window.' : 'An administrator manages these preferences.'}</p></header>
-          <div className="system-settings-grid">
-            <label className="system-settings-tile">
-              <span>System Name</span>
-              <input name="name" required maxLength={60} value={draft.name} onChange={updateField} readOnly={!canEdit || saving} />
-            </label>
-            <div className="system-settings-tile"><span>Timezone</span><strong>Africa/Nairobi (EAT)</strong></div>
-            <div className="system-settings-tile"><span>Currency</span><strong>Kenyan Shillings (KES)</strong></div>
-            <fieldset className="system-settings-tile system-maintenance" disabled={!canEdit || saving}>
-              <legend>Maintenance Window (EAT)</legend>
-              <label><small>Start</small><input type="time" name="maintenance_start" value={draft.maintenance_start} onChange={updateField} /></label>
-              <label><small>End</small><input type="time" name="maintenance_end" value={draft.maintenance_end} onChange={updateField} /></label>
-              <small>Saved schedule for staff reference.</small>
-            </fieldset>
-          </div>
-        </section>
-        <section className="system-settings-panel" aria-label="Integration configuration">
-          <header><h2>Integration Configuration</h2><p>Backend settings. Service health has not been checked.</p></header>
-          <div className="system-settings-grid">
-            <article className="system-settings-tile"><span>Safaricom Daraja sandbox</span><strong>{settings.daraja_sandbox_enabled ? 'Enabled' : 'Disabled'}</strong></article>
-            <article className="system-settings-tile"><span>Mock payments</span><strong>{settings.mock_payments_enabled ? 'Enabled' : 'Disabled'}</strong></article>
-            <article className="system-settings-tile"><span>Router Mode</span><strong>{{ mock: 'Mock', mikrotik: 'MikroTik' }[settings.router_mode] ?? 'Unconfigured'}</strong></article>
-            <article className="system-settings-tile"><span>SMS Notifications</span><strong>Unavailable</strong></article>
-          </div>
-        </section>
-        <section className="system-settings-panel" aria-label="Staff access">
-          <header><h2>Staff Access &amp; Operator Roles</h2><p>Signed in as {canEdit ? 'Administrator' : 'Operator'}.</p></header>
-          <div className="system-settings-grid">
-            <article className="system-settings-tile"><span>Administrators</span><strong>{settings.active_staff_by_role.admin} active</strong><p>Manage system preferences and review audit history.</p></article>
-            <article className="system-settings-tile"><span>Operators</span><strong>{settings.active_staff_by_role.operator} active</strong><p>Review billing, sessions, and system configuration.</p></article>
-          </div>
-        </section>
-      </>}
-    </form>
+    <div className="system-settings-page">
+      <form className="system-settings-page" onSubmit={save}>
+        <header className="page-heading system-settings-heading">
+          <div><h1>System Settings</h1><p>Console preferences, integration configuration, and staff access.</p></div>
+          {canEdit && <div className="system-settings-actions">
+            <button type="button" onClick={onOpenAuditHistory}>Audit History</button>
+            <button type="submit" className="system-settings-primary" disabled={!dirty || saving}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>}
+        </header>
+        {error && <p role="alert" className="system-settings-feedback">{error}</p>}
+        {notice && <p role="status" className="system-settings-feedback">{notice}</p>}
+        {!settings && (
+          error ? <button type="button" onClick={() => { setError(''); setAttempt(attempt + 1) }}>Try again</button>
+            : <p role="status">Loading system settings…</p>
+        )}
+        {settings && draft && <>
+          <section className="system-settings-panel" aria-label="General preferences">
+            <header><h2>General Preferences</h2><p>{canEdit ? 'Store the console name and maintenance window.' : 'An administrator manages these preferences.'}</p></header>
+            <div className="system-settings-grid">
+              <label className="system-settings-tile">
+                <span>System Name</span>
+                <input name="name" required maxLength={60} value={draft.name} onChange={updateField} readOnly={!canEdit || saving} />
+              </label>
+              <div className="system-settings-tile"><span>Timezone</span><strong>Africa/Nairobi (EAT)</strong></div>
+              <div className="system-settings-tile"><span>Currency</span><strong>Kenyan Shillings (KES)</strong></div>
+              <fieldset className="system-settings-tile system-maintenance" disabled={!canEdit || saving}>
+                <legend>Maintenance Window (EAT)</legend>
+                <label><small>Start</small><input type="time" name="maintenance_start" value={draft.maintenance_start} onChange={updateField} /></label>
+                <label><small>End</small><input type="time" name="maintenance_end" value={draft.maintenance_end} onChange={updateField} /></label>
+                <small>Saved schedule for staff reference.</small>
+              </fieldset>
+            </div>
+          </section>
+          <section className="system-settings-panel" aria-label="Integration configuration">
+            <header><h2>Integration Configuration</h2><p>Backend settings. Service health has not been checked.</p></header>
+            <div className="system-settings-grid">
+              <article className="system-settings-tile"><span>Safaricom Daraja sandbox</span><strong>{settings.daraja_sandbox_enabled ? 'Enabled' : 'Disabled'}</strong></article>
+              <article className="system-settings-tile"><span>Mock payments</span><strong>{settings.mock_payments_enabled ? 'Enabled' : 'Disabled'}</strong></article>
+              <article className="system-settings-tile"><span>Router Mode</span><strong>{{ mock: 'Mock', mikrotik: 'MikroTik' }[settings.router_mode] ?? 'Unconfigured'}</strong></article>
+              <article className="system-settings-tile"><span>SMS Notifications</span><strong>Unavailable</strong></article>
+            </div>
+          </section>
+          <section className="system-settings-panel" aria-label="Staff access">
+            <header><h2>Staff Access &amp; Operator Roles</h2><p>Signed in as {canEdit ? 'Administrator' : 'Operator'}.</p></header>
+            <div className="system-settings-grid">
+              <article className="system-settings-tile"><span>Administrators</span><strong>{settings.active_staff_by_role.admin} active</strong><p>Manage system preferences and review audit history.</p></article>
+              <article className="system-settings-tile"><span>Operators</span><strong>{settings.active_staff_by_role.operator} active</strong><p>Review billing, sessions, and system configuration.</p></article>
+            </div>
+          </section>
+        </>}
+      </form>
+      {canEdit && <SupportFaqSettings accessToken={accessToken} onSignOut={onSignOut} />}
+    </div>
   )
 }

@@ -1,12 +1,16 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
-from sqlalchemy import func
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, StringConstraints
+from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import create_token, hash_password, read_token, verify_password
 from app.db.session import get_db
 from app.models import User
+from app.schemas.payment import normalise_kenyan_mobile
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 bearer = HTTPBearer(auto_error=False)
@@ -30,6 +34,12 @@ def current_staff(credentials: HTTPAuthorizationCredentials | None = Depends(bea
     if user.role not in STAFF_ROLES:
         raise HTTPException(403, "Staff only")
     return user
+
+
+def require_admin(staff: User = Depends(current_staff)) -> User:
+    if staff.role != "admin":
+        raise HTTPException(403, "Administrator access required")
+    return staff
 
 
 def authenticate_user(db: Session, data: LoginIn, roles: tuple[str, ...]) -> User:
@@ -56,6 +66,17 @@ class CustomerLoginIn(LoginIn):
     password: str = Field(min_length=1, max_length=128)
 
 
+class CustomerRegistration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+    email: Annotated[str, StringConstraints(
+        strip_whitespace=True, to_lower=True, max_length=150, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    )]
+    phone: str = Field(max_length=32)
+    password: SecretStr
+
+
 class CustomerProfile(BaseModel):
     id: int
     full_name: str
@@ -72,6 +93,41 @@ def current_customer(
     if user is None or user.status != "active" or user.role != "customer":
         raise HTTPException(401, "Not authenticated", headers={"WWW-Authenticate": "Bearer"})
     return user
+
+
+@router.post("/customer/register", response_model=CustomerProfile, status_code=201)
+def register_customer(data: CustomerRegistration, db: Session = Depends(get_db)):
+    password = data.password.get_secret_value()
+    if not 8 <= len(password) <= 128 or not password.strip():
+        raise HTTPException(422, "Use a password with 8 to 128 characters.")
+    try:
+        phone = normalise_kenyan_mobile(data.phone)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from None
+
+    conflict_message = "An account already uses these details. Sign in or contact support."
+    phone_forms = (phone, f"+{phone}", f"0{phone[3:]}")
+    existing = db.scalar(select(User.id).where(or_(
+        func.lower(User.email) == data.email,
+        func.replace(func.trim(User.phone), " ", "").in_(phone_forms),
+    )).limit(1))
+    if existing is not None:
+        raise HTTPException(409, conflict_message)
+
+    customer = User(
+        full_name=data.full_name, email=data.email, phone=phone,
+        password_hash=hash_password(password), role="customer", status="active",
+    )
+    db.add(customer)
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(409, conflict_message) from None
+    db.refresh(customer)
+    return CustomerProfile(id=customer.id, full_name=customer.full_name, email=customer.email, phone=customer.phone)
 
 
 @router.post("/customer/login")
