@@ -62,6 +62,11 @@ STK_QUERY_PATH = "/mpesa/stkpushquery/v1/query"
 # to ask again (the polling job), so the client can never hammer Daraja.
 STK_QUERY_TIMEOUT_SECONDS = 10.0
 
+# Daraja's errorCode for an invalid access token (from the official Daraja
+# portal). It is checked by code, not only by HTTP status, because the status
+# that accompanies it is not confirmed to be 401 or 403.
+INVALID_TOKEN_ERROR_CODE = "404.001.03"
+
 # Daraja's text fields are untrusted: keep only short strings for logs.
 _MAX_LOGGED_TEXT = 100
 
@@ -104,7 +109,7 @@ class DarajaClient:
         self._http=http_client
         self._token_cache = token_cache if token_cache is not None else TokenCache()
         self._sleep=sleep
-        # One lock for the whole "check cache, fetch, store" sequence. 
+        # One lock for the whole "check cache, fetch, store" sequence.
         # Each new token invalidates the previous one, so concurrent fetches would break each other's tokens.
         self._token_lock = threading.Lock()
 
@@ -130,6 +135,26 @@ class DarajaClient:
         """Forget the cached token, for example after Daraja rejects it."""
         with self._token_lock:
             self._token_cache.invalidate()
+
+    def _drop_token_if_rejected(self, status: int, error_code: str | None) -> None:
+        """Discard the cached token when Daraja says it is no longer valid.
+
+        Without this, a token that Daraja has already invalidated would stay
+        cached until its expiry time and every later request would fail. The
+        request that was rejected is NOT retried here: an STK Push must never
+        be repeated, and the caller decides about queries. The next call simply
+        fetches a fresh token.
+
+        Known limit: if another thread has already cached a newer token, this
+        discards that one too. That costs an extra token fetch, nothing worse
+        at pilot volume.
+        """
+        if status in (401, 403) or error_code == INVALID_TOKEN_ERROR_CODE:
+            # Only the HTTP status is logged: never the token or the body.
+            logger.warning(
+                "Daraja rejected the access token (HTTP %d); discarding it.", status
+            )
+            self.invalidate_token()
 
     def _fetch_token(self) -> tuple[str, int]:
         """Request a token from Daraja, retrying transient failures."""
@@ -252,10 +277,6 @@ class DarajaClient:
     def _parse_stk_push_response(self, response: httpx.Response) -> StkPushAccepted:
         """Validate Daraja's reply. Never trust its shape or types."""
         status = response.status_code
-        if status >= 500:
-            raise DarajaUnavailableError(
-                f"Daraja returned HTTP {status} for the push; outcome unknown."
-            )
 
         try:
             body = response.json()
@@ -264,15 +285,21 @@ class DarajaClient:
         if not isinstance(body, dict):
             body = {}
 
+        # Checked BEFORE the status branches so an invalid-token reply drops the
+        # dead token whatever HTTP status accompanies it. This push is NOT retried.
+        error_code = _safe_text(body.get("errorCode"))
+        self._drop_token_if_rejected(status, error_code)
+
+        if status >= 500:
+            raise DarajaUnavailableError(
+                f"Daraja returned HTTP {status} for the push; outcome unknown."
+            )
+
         if status != 200:
-            if status in (401, 403):
-                # The token may have been invalidated elsewhere. Drop it so the
-                # next request fetches a fresh one. This push is NOT retried.
-                self.invalidate_token()
             raise DarajaRejectedError(
                 f"Daraja refused the STK Push (HTTP {status}).",
                 http_status=status,
-                error_code=_safe_text(body.get("errorCode")),
+                error_code=error_code,
                 request_id=_safe_text(body.get("requestId")),
             )
 
@@ -361,23 +388,27 @@ class DarajaClient:
     def _handle_stk_query_response(self, response: httpx.Response, checkout_request_id: str) -> StkQueryResult:
         """Turn an HTTP reply into an StkQueryResult, or raise a DarajaError."""
         status = response.status_code
-        if status >= 500:
-            # Includes Daraja's "still being processed" reply: not an answer.
-            raise DarajaUnavailableError(f"Daraja returned HTTP {status} for the query.")
 
         try:
             body = response.json()
         except ValueError:
             body = None
+        error_body = body if isinstance(body, dict) else {}
+
+        # Checked BEFORE the status branches so an invalid-token reply drops the
+        # dead token whatever HTTP status accompanies it.
+        error_code = _safe_text(error_body.get("errorCode"))
+        self._drop_token_if_rejected(status, error_code)
+
+        if status >= 500:
+            # Includes Daraja's "still being processed" reply: not an answer.
+            raise DarajaUnavailableError(f"Daraja returned HTTP {status} for the query.")
 
         if status != 200:
-            if status in (401, 403):
-                self.invalidate_token()
-            error_body = body if isinstance(body, dict) else {}
             raise DarajaRejectedError(
                 f"Daraja refused the STK Query (HTTP {status}).",
                 http_status=status,
-                error_code=_safe_text(error_body.get("errorCode")),
+                error_code=error_code,
                 request_id=_safe_text(error_body.get("requestId")),
             )
 
@@ -389,3 +420,4 @@ class DarajaClient:
             result.outcome.value,
         )
         return result
+    

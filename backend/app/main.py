@@ -23,6 +23,7 @@ from app.api.routes.manual_stk import router as manual_stk_router
 from app.api.routes.network import router as network_inventory_router
 from app.api.routes.payments import router as mpesa_payments_router
 from app.api.routes.mpesa_callback import router as mpesa_callback_router
+from app.api.routes.recovery import router as recovery_router
 
 app = FastAPI(title="Weza Wi-Fi Billing API")
 
@@ -38,6 +39,7 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(staff_router)
+app.include_router(recovery_router)
 app.include_router(settings_router)
 app.include_router(support_router)
 app.include_router(assist_router)

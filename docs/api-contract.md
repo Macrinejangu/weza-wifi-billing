@@ -2,6 +2,8 @@
 
 FastAPI publishes the full request and response schemas at `/docs` and `/openapi.json`.
 
+Staff payment recovery routes are described in [payment recovery](payment-recovery.md).
+
 ## Foundation API
 
 - `GET /health` returns HTTP 200 with `{"status":"ok"}`. This checks whether the API process responds.
