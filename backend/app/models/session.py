@@ -49,6 +49,10 @@ class WiFiSession(TimestampMixin, Base):
             "OR (started_at IS NULL AND expires_at IS NULL)",
             name="ck_sessions_timer_needs_activation",
         ),
+        CheckConstraint(
+            "disconnection_status IN ('not_started', 'waiting', 'succeeded', 'failed')",
+            name="ck_sessions_disconnection_status",
+        ),
     )
 
     id = Column(Integer, primary_key=True)
@@ -86,6 +90,15 @@ class WiFiSession(TimestampMixin, Base):
     )
 
     subscription_id = Column(Integer, ForeignKey("subscriptions.id"), unique=True)
+
+    router_grant_id = Column(String(32), unique=True)
+    router_identity = Column(String(255))
+    router_session_id = Column(String(255))
+    router_server_name = Column(String(255))
+    disconnection_status = Column(String(20), server_default="not_started", nullable=False)
+    disconnection_requested_at = Column(DateTime(timezone=True))
+    disconnected_at = Column(DateTime(timezone=True))
+    disconnection_error = Column(String(255))
 
     device_mac_address = Column(String(17))
     device_ip_address = Column(String(45))

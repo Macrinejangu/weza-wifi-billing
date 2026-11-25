@@ -167,4 +167,3 @@ def test_two_simultaneous_fulfilments_make_one_session_and_one_router_call(
     # waited on the lock and then found the work already done.
     assert [r.outcome for r in results] == [FulfilmentOutcome.ACTIVATED] * 2
     assert results[0].session_id == results[1].session_id
-    

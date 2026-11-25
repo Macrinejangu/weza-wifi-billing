@@ -136,6 +136,7 @@ def activate_hotspot_device(
     ip_address: str | None = None,
     *,
     verify_only: bool = False,
+    grant_id: str | None = None,
 ) -> dict:
     """
     Authorize a device through MikroTik Hotspot MAC authentication.
@@ -145,6 +146,7 @@ def activate_hotspot_device(
     match the purchased package.
     """
     mac = _normalize_mac(mac_address)
+    marker = f"WEZA grant {grant_id}" if grant_id else None
     download_speed = _validate_speed(
         download_speed_mbps, "Download speed"
     )
@@ -302,6 +304,8 @@ def activate_hotspot_device(
                             if key in snapshot
                         },
                     }
+                    if marker is not None:
+                        restore["comment"] = snapshot.get("comment", "")
                     user_path.update(**restore)
 
                 elif rollback_state["user_id"]:
@@ -467,6 +471,18 @@ def activate_hotspot_device(
                 "Duplicate Hotspot users found for this device MAC"
             )
 
+        if marker is not None and matching_users:
+            existing = matching_users[0]
+            owned = existing.get("comment") == marker
+            reusable = (
+                str(existing.get("comment", "")).startswith("WEZA grant ")
+                and existing.get("server") == server_name
+                and existing.get("disabled") in (True, "true", "yes")
+                and not preexisting_sessions
+            )
+            if not owned and not reusable:
+                raise RouterActivationError("An existing hotspot user is not available for this purchase")
+
         if preexisting_sessions:
             # Idempotent retry: verify existing resources without modifying them.
             if len(matching_profiles) != 1:
@@ -551,6 +567,7 @@ def activate_hotspot_device(
                         "profile": speed_profile_name,
                         "server": server_name,
                         "disabled": "no",
+                        **({"comment": marker} if marker is not None else {}),
                     }
                 )
             else:
@@ -561,6 +578,7 @@ def activate_hotspot_device(
                     profile=speed_profile_name,
                     server=server_name,
                     disabled="no",
+                    **({"comment": marker} if marker is not None else {}),
                 )
                 if not rollback_state["user_id"]:
                     rollback_state["unidentified_new_user"] = True
@@ -647,6 +665,9 @@ def activate_hotspot_device(
                 "Could not verify the device Hotspot user"
             )
 
+        if marker is not None and verified_users[0].get("comment") != marker:
+            raise RouterActivationError("Could not verify ownership of the hotspot grant")
+
         if verified_users[0].get("profile") != speed_profile_name:
             raise RouterActivationError(
                 "Device Hotspot user has an unexpected speed profile"
@@ -724,6 +745,8 @@ def activate_hotspot_device(
 
         return {
             "status": "ACTIVE",
+            "router_identity": expected_identity,
+            "router_session_id": matching_active_devices[0].get(".id"),
             "mac_address": mac,
             "ip_address": str(parsed_ip),
             "server": server_name,
@@ -754,5 +777,85 @@ def activate_hotspot_device(
 
         raise
 
+    finally:
+        api.close()
+
+
+def expire_hotspot_grant(
+    mac_address: str,
+    grant_id: str,
+    *,
+    router_identity: str | None = None,
+    router_server_name: str | None = None,
+) -> None:
+    """Disable only the user tagged by this access grant, including reconnects."""
+    mac = _normalize_mac(mac_address)
+    marker = f"WEZA grant {grant_id}"
+    expected = router_settings()["expected_identity"]
+    if not expected:
+        raise RouterActivationError("Expected MikroTik router identity is not configured")
+    if router_identity is not None and router_identity != expected:
+        raise RouterActivationError("Recorded router does not match the configured router")
+
+    api = connect_router()
+    try:
+        identity = list(api.path("system", "identity"))
+        if len(identity) != 1 or identity[0].get("name") != expected:
+            raise RouterActivationError("Connected router identity does not match WEZA configuration")
+
+        servers = [
+            server["name"] for server in api.path("ip", "hotspot")
+            if server.get("interface") == HOTSPOT_INTERFACE
+            and server.get("profile") == HOTSPOT_PROFILE
+            and server.get("name")
+        ]
+        if len(servers) != 1:
+            raise RouterActivationError("Expected one identifiable WEZA hotspot server")
+        if router_server_name is not None and router_server_name != servers[0]:
+            raise RouterActivationError("Recorded hotspot server does not match the configured server")
+
+        users = api.path("ip", "hotspot", "user")
+        matches = [
+            user for user in users
+            if user.get("name", "").upper() == mac and user.get("server") == servers[0]
+        ]
+        active = api.path("ip", "hotspot", "active")
+
+        def owned_connections():
+            return [
+                row for row in active
+                if row.get("user", "").upper() == mac and row.get("server") == servers[0]
+            ]
+
+        if not matches:
+            if owned_connections():
+                raise RouterActivationError("An active connection has no verifiable hotspot user")
+            return
+        if len(matches) != 1:
+            raise RouterActivationError("The expired hotspot user is ambiguous")
+        user = matches[0]
+        if user.get("comment") != marker:
+            if str(user.get("comment", "")).startswith("WEZA grant "):
+                # A different grant owns this device now.
+                return
+            raise RouterActivationError("Cannot verify ownership of the expired hotspot user")
+
+        for row in owned_connections():
+            if not row.get(".id") or _normalize_mac(row.get("mac-address", "")) != mac:
+                raise RouterActivationError("Cannot verify the device on an active connection")
+        if not user.get(".id"):
+            raise RouterActivationError("The expired hotspot user has no identifier")
+        users.update(**{".id": user[".id"], "disabled": "yes"})
+        disabled = [entry for entry in users if entry.get(".id") == user[".id"]]
+        if len(disabled) != 1 or disabled[0].get("comment") != marker or (
+            disabled[0].get("disabled") not in (True, "true", "yes")
+        ):
+            raise RouterActivationError("Router did not confirm the hotspot user was disabled")
+        for row in owned_connections():
+            if not row.get(".id") or _normalize_mac(row.get("mac-address", "")) != mac:
+                raise RouterActivationError("Cannot verify the device on an active connection")
+            active.remove(row[".id"])
+        if owned_connections():
+            raise RouterActivationError("Router did not confirm the device disconnected")
     finally:
         api.close()

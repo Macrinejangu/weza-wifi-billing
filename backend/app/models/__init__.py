@@ -14,3 +14,4 @@ from app.models.notification import Notification
 from app.models.support_ticket import SupportTicket
 from app.models.admin_audit_log import AdminAuditLog
 from app.models.system_settings import SystemSettings
+from app.models.support_faq import SupportFaq

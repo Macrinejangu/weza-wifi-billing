@@ -1222,3 +1222,42 @@ def test_reconciliation_reads_only_and_verifies_late_speed_queue(
     assert result["status"] == "ACTIVE"
     assert users == [user]
     assert len(api.active_devices) == 1
+
+
+def test_expiry_removes_reconnected_device_and_preserves_other_devices(monkeypatch):
+    mac = "AA:BB:CC:DD:EE:FF"
+    server = "WEZA-Hotspot-Server"
+    api = FakeAPI(active_devices=[
+        {".id": "*reconnected", "user": mac, "mac-address": mac, "server": server},
+        {".id": "*other", "user": "another-user", "server": server},
+    ])
+    def verify_disabled_before_disconnect(_):
+        assert user["disabled"] == "yes"
+
+    api.initial_active_session_ids.clear()
+    original_path = api.path
+
+    def path(*segments):
+        result = original_path(*segments)
+        if segments == ("ip", "hotspot", "active"):
+            result.on_remove = verify_disabled_before_disconnect
+        return result
+
+    api.path = path
+    user = {".id": "*user", "name": mac, "server": server, "comment": "WEZA grant original", "disabled": "no"}
+    api.paths[("ip", "hotspot", "user")].append(user)
+    monkeypatch.setattr(router_service, "connect_router", lambda: api)
+    monkeypatch.setattr(router_service, "router_settings", lambda: {"expected_identity": "CHR"})
+
+    router_service.expire_hotspot_grant(mac, "original")
+    router_service.expire_hotspot_grant(mac, "original")
+
+    assert user["disabled"] == "yes"
+    assert [entry[".id"] for entry in api.active_devices] == ["*other"]
+
+    # An older expiry must never revoke a replacement grant.
+    user.update({"comment": "WEZA grant later", "disabled": "no"})
+    api.active_devices.append({".id": "*new", "user": mac, "mac-address": mac, "server": server})
+    router_service.expire_hotspot_grant(mac, "original")
+    assert user["disabled"] == "no"
+    assert [entry[".id"] for entry in api.active_devices] == ["*other", "*new"]

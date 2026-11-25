@@ -240,9 +240,9 @@ function PaymentStatusView({
         aria-labelledby="payment-status-title"
         className="w-full max-w-md rounded-2xl border border-[#ebe9e5] bg-white p-5 text-center text-[#17152d] shadow-sm sm:p-7"
       >
-        {isPreview && (
+        {(isPreview || transaction?.simulated) && (
           <p className="mb-4 text-xs font-semibold text-[#585172]">
-            Development preview · Sample transaction
+            {transaction?.simulated ? 'Simulated payment. No money was collected.' : 'Development preview · Sample transaction'}
           </p>
         )}
 
@@ -304,8 +304,8 @@ function PaymentStatusView({
             </>
           )}
 
-          {isSuccessful && !isPreview && !isCustomerStatus && (
-            <Link to="/connection-status" className={primaryAction}>
+          {isSuccessful && !isPreview && (
+            <Link to={isCustomerStatus ? `/connection-status?payment=${transaction.id}` : '/connection-status'} className={primaryAction}>
               View connection status <ArrowRight aria-hidden="true" size={17} />
             </Link>
           )}

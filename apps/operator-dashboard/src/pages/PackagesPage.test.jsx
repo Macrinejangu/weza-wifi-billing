@@ -3,6 +3,8 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import App from '../App.jsx'
+import PackagesPage from './PackagesPage.jsx'
+import SupportFaqSettings from './SupportFaqSettings.jsx'
 
 vi.hoisted(() => {
   vi.stubEnv('DEV', true)
@@ -135,4 +137,55 @@ test('dismisses the dialog on native Escape cancellation and restores focus', ()
   act(() => dialog.dispatchEvent(new Event('cancel', { cancelable: true })))
   expect(container.querySelector('dialog')).toBeNull()
   expect(document.activeElement).toBe(trigger)
+})
+
+test('admins save live packages through the API and operators get read-only controls', async () => {
+  const saved = {
+    id: 7, name: 'Live pilot pass', service_type: 'hotspot', is_active: true, price: 20,
+    duration_minutes: 60, download_speed_mbps: 5, upload_speed_mbps: 2, description: null,
+  }
+  const fetcher = vi.fn(async (url) => ({
+    ok: true,
+    json: async () => url === '/api/packages/staff' ? [] : saved,
+  }))
+  vi.stubGlobal('fetch', fetcher)
+  await act(async () => root.render(<PackagesPage live accessToken="admin-token" canManage />))
+  click('Add Package')
+  const dialog = container.querySelector('dialog')
+  enter(dialog.querySelector('[name="name"]'), saved.name)
+  for (const name of ['price', 'duration_minutes', 'download_speed_mbps', 'upload_speed_mbps']) {
+    enter(dialog.querySelector(`[name="${name}"]`), String(saved[name]))
+  }
+  await act(async () => dialog.querySelector('[type="submit"]').click())
+  const { id, is_active: active, ...fields } = saved
+  expect(fetcher).toHaveBeenCalledWith('/api/packages/', expect.objectContaining({
+    method: 'POST',
+    body: JSON.stringify({
+      name: fields.name, service_type: fields.service_type, description: fields.description,
+      price: fields.price, duration_minutes: fields.duration_minutes,
+      download_speed_mbps: fields.download_speed_mbps, upload_speed_mbps: fields.upload_speed_mbps,
+    }),
+    headers: expect.objectContaining({ Authorization: 'Bearer admin-token' }),
+  }))
+  expect(id).toBe(7)
+  expect(active).toBe(true)
+  expect(packageNames()).toEqual(['Live pilot pass'])
+  await act(async () => root.render(<PackagesPage live accessToken="operator-token" />))
+  expect(click('Add Package').disabled).toBe(true)
+})
+
+test('saves a guided support answer under the staff account', async () => {
+  const faq = { id: 1, question: 'Can I get help?', steps: ['Check Connection Status.'] }
+  const fetcher = vi.fn(async (url) => ({
+    ok: true, json: async () => url === '/api/support/faqs' ? [faq] : { ...faq, question: 'Paid but offline?' },
+  }))
+  vi.stubGlobal('fetch', fetcher)
+  await act(async () => root.render(<SupportFaqSettings accessToken="admin-token" onSignOut={vi.fn()} />))
+  enter(container.querySelector('input'), 'Paid but offline?')
+  await act(async () => container.querySelector('button[type="submit"]').click())
+  expect(fetcher).toHaveBeenCalledWith('/api/support/faqs/1', expect.objectContaining({
+    method: 'PUT',
+    body: JSON.stringify({ question: 'Paid but offline?', steps: faq.steps }),
+  }))
+  expect(container.textContent).toContain('Support answer saved.')
 })

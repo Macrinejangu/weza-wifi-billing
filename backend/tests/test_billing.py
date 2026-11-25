@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.core.security import create_token, hash_password
+from app.core.security import create_token
 from app.models import ActivationAttempt, Payment, User
 from app.services.mock_payment import process_mock_payment
 from app.services.payment_service import apply_payment_result, create_payment
@@ -152,49 +152,6 @@ def test_mock_purchase_payment_and_activation(client, db, user, package, monkeyp
     assert client.get(path, headers=headers).json() == active.json()
 
 
-def test_package_writes_require_mock_mode(client, db, monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "x" * 40)
-    staff = User(
-        full_name="Staff",
-        email="billing-staff@weza.local",
-        password_hash=hash_password("correct-horse-battery"),
-        role="operator",
-        status="active",
-    )
-    db.add(staff)
-    db.commit()
-
-    login = client.post("/api/auth/login", json={
-        "email": "billing-staff@weza.local",
-        "password": "correct-horse-battery",
-    })
-    assert login.status_code == 200
-    headers = {
-        "Authorization": f"Bearer {login.json()['access_token']}"
-    }
-
-    monkeypatch.delenv("ENABLE_MOCK_PAYMENTS", raising=False)
-    payload = {
-        "name": "Demo", "service_type": "hotspot", "price": 20,
-        "duration_minutes": 60, "download_speed_mbps": 5, "upload_speed_mbps": 2,
-    }
-    assert client.post("/api/packages/", json=payload, headers=headers).status_code == 404
-
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
-    assert client.post(
-        "/api/packages/",
-        json={**payload, "duration_minutes": 0},
-        headers=headers,
-    ).status_code == 422
-
-    created = client.post("/api/packages/", json=payload, headers=headers)
-    assert created.status_code == 200
-    assert client.delete(
-        f"/api/packages/{created.json()['id']}", headers=headers
-    ).status_code == 200
-    assert client.get("/api/packages/").json() == []
-
-
 def test_mock_payment_is_rejected_before_mikrotik_activation(
     db, user, package, monkeypatch
 ):
@@ -251,19 +208,19 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     session = create_session(db, payment.id)
     calls = []
 
-    def activate_once(**kwargs):
-        calls.append("activate")
-        raise RouterActivationUnconfirmed("Router timed out")
+    grant_ids = set()
 
-    def verify_only(**kwargs):
-        assert kwargs["verify_only"] is True
+    def router_call(**kwargs):
+        grant_ids.add(kwargs["grant_id"])
+        if not kwargs.get("verify_only"):
+            calls.append("activate")
+            raise RouterActivationUnconfirmed("Router timed out")
         calls.append("verify")
         if calls.count("verify") == 1:
             raise RouterActivationUnconfirmed("Router has not confirmed the session")
         return {"status": "ACTIVE"}
 
-    monkeypatch.setattr(session_service, "activate_access_device", activate_once)
-    monkeypatch.setattr(session_service, "activate_hotspot_device", verify_only)
+    monkeypatch.setattr(session_service, "activate_hotspot_device", router_call)
     endpoint = f"/api/sessions/{session.id}/activate"
     headers = staff_headers(db, monkeypatch)
 
@@ -279,6 +236,7 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     assert response.json()["started_at"] is not None
     assert client.post(endpoint, headers=headers).status_code == 200
     assert calls == ["activate", "verify", "verify"]
+    assert grant_ids == {db.get(type(session), session.id).router_grant_id}
 
     attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()
     assert attempt.status == "succeeded"

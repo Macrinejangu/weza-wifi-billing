@@ -1,9 +1,10 @@
 import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { AccountField, AccountForm } from '../components/AccountForm'
 
 export default function Login({ onSignIn }) {
+  const { state } = useLocation()
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -27,8 +28,9 @@ export default function Login({ onSignIn }) {
     <AccountForm
       title="Sign in"
       description="Use your email address to sign in to the Weza customer portal."
-      footer={<>Need a pilot account? <Link to="/support" className="font-semibold underline">Get support</Link></>}
+      footer={<>New to Weza? <Link to="/register" state={state} className="font-semibold underline">Create an account</Link></>}
     >
+      {state?.registered && <p role="status" className="mb-4 text-sm">Account created. Sign in to continue.</p>}
       <form onSubmit={handleLogin} className="space-y-4">
         <AccountField
           label="Email address"

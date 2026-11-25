@@ -45,14 +45,33 @@ async function apiRequest(endpoint, options = {}) {
   return data
 }
 
-export function createCustomerPurchase({ accessToken, packageId, idempotencyKey }) {
-  return apiRequest('/api/customer/purchases', {
+export function getCheckoutDeviceReference({ accessToken, packageId, idempotencyKey }) {
+  return apiRequest('/api/customer/checkout/device-reference', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify({ package_id: packageId }),
+  })
+}
+
+export function createCustomerPurchase({ accessToken, packageId, idempotencyKey, deviceReference }) {
+  return apiRequest('/api/customer/purchases', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Idempotency-Key': idempotencyKey,
+    },
+    body: JSON.stringify({ package_id: packageId, device_reference: deviceReference }),
+  })
+}
+
+export function submitMockPayment({ accessToken, purchaseId, phoneNumber }) {
+  return apiRequest('/api/customer/payments/mock', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ purchase_id: purchaseId, phone_number: phoneNumber }),
   })
 }
 
@@ -75,12 +94,13 @@ export function getCustomerPayment({ accessToken, paymentId, signal }) {
   })
 }
 
-export function getConnectionStatus() {
-  return apiRequest('/api/network/status')
-}
-
-export function getMySubscription() {
-  return apiRequest('/api/subscriptions/me')
+export function getMyConnection({ accessToken, paymentId, signal }) {
+  const query = paymentId ? `?payment_id=${encodeURIComponent(paymentId)}` : ''
+  return apiRequest(`/api/customer/connection${query}`, {
+    cache: 'no-store',
+    signal,
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
 }
 
 
@@ -97,4 +117,15 @@ export function getCustomerProfile(accessToken) {
     cache: 'no-store',
     headers: { Authorization: `Bearer ${accessToken}` },
   })
+}
+
+export function registerCustomer({ fullName, email, phone, password }) {
+  return apiRequest('/api/auth/customer/register', {
+    method: 'POST',
+    body: JSON.stringify({ full_name: fullName, email, phone, password }),
+  })
+}
+
+export function listSupportFaqs(signal) {
+  return apiRequest('/api/support/faqs', { cache: 'no-store', signal })
 }

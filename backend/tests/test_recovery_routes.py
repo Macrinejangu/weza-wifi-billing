@@ -32,9 +32,9 @@ def staff(client, user, monkeypatch):
 
 
 def stuck_payment(db, user, package):
-    """A confirmed payment, paid an hour ago, with no session."""
+    """A confirmed payment, paid 30 minutes ago, with no session."""
     payment = make_paid(db, user, package)
-    payment.paid_at = datetime.now(UTC) - timedelta(hours=1)
+    payment.paid_at = datetime.now(UTC) - timedelta(minutes=30)
     db.commit()
     return payment
 

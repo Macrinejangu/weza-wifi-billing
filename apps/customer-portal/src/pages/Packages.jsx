@@ -4,10 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { fetchActivePackages } from '../services/api.js'
 
-const sandboxCheckoutEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
-
-const sandboxPackageId = Number(import.meta.env.VITE_SANDBOX_PACKAGE_ID)
+import { checkoutMode, packageSupportsCheckout } from '../checkoutSettings.js'
 
 const demoPackages = demoDataEnabled ? [
   {
@@ -117,9 +114,7 @@ export default function Packages() {
     ? packages.find((item) => String(item.id) === packageId)
     : undefined
 
-  const showSandboxCheckout =
-    sandboxCheckoutEnabled &&
-    selectedPackage?.id === sandboxPackageId
+  const showCheckout = packageSupportsCheckout(selectedPackage?.id)
 
   return (
     <div className="page-content">
@@ -147,13 +142,13 @@ export default function Packages() {
         selectedPackage ? (
           <div className="max-w-lg">
             <PackageCard item={selectedPackage} />
-            {showSandboxCheckout ? (
+            {showCheckout ? (
               <Link
                 to="/confirm-package"
                 state={{ selectedPackage }}
                 className="package-button mt-5 text-center"
               >
-                Continue to M-Pesa checkout
+                {checkoutMode === 'mock' ? 'Continue to simulated checkout' : 'Continue to M-Pesa checkout'}
                 <ArrowRight size={17} aria-hidden="true" />
               </Link>
             ) : (

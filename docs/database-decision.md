@@ -11,7 +11,7 @@ python -m alembic upgrade head
 python -m alembic current
 ```
 
-The starting revision is `0001 (head)`. It establishes migration tracking. Define packages, payments, sessions and staff user tables under WEZA-33 after reviewing the data model.
+Run `python -m alembic heads` to see the current schema revision. Before testing, confirm `python -m alembic current` reports that revision.
 
 For a schema change, run `python -m alembic revision -m "describe the change"` and fill in the generated upgrade and downgrade functions. Test the migration against a disposable local database. Keep one migration head. When two schema branches overlap, coordinate their revision order during review. Include the migration in the same pull request as its model changes.
 

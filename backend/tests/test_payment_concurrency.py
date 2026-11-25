@@ -189,4 +189,3 @@ def test_two_identical_callbacks_at_once_apply_exactly_once(engine, committed):
         ).one()
         assert session.subscription_id == subscription.id
         assert attempt.status == "succeeded"
-        

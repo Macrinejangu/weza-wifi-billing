@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { demoDataEnabled } from '../../shared/demoMode.js'
 import PaymentStatus, { CustomerPaymentStatus } from './components/payments/PaymentStatus'
-import ConnectionStatus from './pages/ConnectionStatus'
+import ConnectionStatus, { CustomerConnectionStatus } from './pages/ConnectionStatus'
 import CustomerLayout from './components/layout/CustomerLayout'
 
 import ConfirmPackage from './pages/ConfirmPackage'
@@ -19,8 +19,7 @@ import Welcome from './pages/Welcome'
 import PackageExpired from './pages/PackageExpired'
 import { getCustomerProfile, loginCustomer } from './services/api.js'
 
-const sandboxCheckoutEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_ENABLE_SANDBOX_CHECKOUT === 'true'
+import { checkoutMode } from './checkoutSettings.js'
 
 function UnavailablePage({ title, message }) {
   return (
@@ -44,10 +43,14 @@ function getTokenExpiry(accessToken) {
 export default function App() {
   const { state } = useLocation()
   const returnPaymentId = state?.returnPaymentId
-  const signInDestination =
-    typeof returnPaymentId === 'string' && /^[1-9]\d{0,9}$/.test(returnPaymentId)
-      ? `/payment-status?payment=${returnPaymentId}`
-      : '/profile'
+  const returnPackageId = state?.returnPackageId
+  const returnConnection = state?.returnConnection === true
+  let signInDestination = returnConnection ? '/connection-status' : '/profile'
+  if (typeof returnPaymentId === 'string' && /^[1-9]\d{0,9}$/.test(returnPaymentId)) {
+    signInDestination = `${returnConnection ? '/connection-status' : '/payment-status'}?payment=${returnPaymentId}`
+  } else if (Number.isSafeInteger(returnPackageId) && returnPackageId > 0) {
+    signInDestination = `/packages?package=${returnPackageId}`
+  }
   const [customerSession, setCustomerSession] = useState(null)
   const expiresAt = customerSession?.expiresAt
 
@@ -71,6 +74,11 @@ export default function App() {
     setCustomerSession({ accessToken, profile, expiresAt: expiry })
   }
 
+  const connection = <CustomerConnectionStatus
+    accessToken={customerSession?.accessToken}
+    onSessionExpired={() => setCustomerSession(null)}
+  />
+
   return (
     <Routes>
       <Route path="/" element={<Welcome />} />
@@ -80,12 +88,7 @@ export default function App() {
       <Route
         path="/package-expired"
         element={
-          demoDataEnabled ? <PackageExpired /> : (
-            <UnavailablePage
-              title="Subscription status"
-              message="Your subscription status could not be verified."
-            />
-          )
+          demoDataEnabled ? <PackageExpired /> : connection
         }
       />
       <Route path="/hotspot-entry" element={<HotspotEntry />} />
@@ -104,12 +107,7 @@ export default function App() {
       <Route
         path="/connection-status"
         element={
-          demoDataEnabled ? <ConnectionStatus /> : (
-            <UnavailablePage
-              title="Connection status"
-              message="Live connection status is currently unavailable."
-            />
-          )
+          demoDataEnabled ? <ConnectionStatus /> : connection
         }
       />
 
@@ -117,19 +115,14 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            demoDataEnabled ? <Dashboard /> : (
-              <UnavailablePage
-                title="Dashboard"
-                message="Connection and subscription details are currently unavailable."
-              />
-            )
+            demoDataEnabled ? <Dashboard /> : connection
           }
         />
         <Route path="/packages" element={<Packages />} />
         <Route
           path="/confirm-package"
           element={
-            demoDataEnabled || sandboxCheckoutEnabled ? <ConfirmPackage accessToken={customerSession?.accessToken} /> : (
+            demoDataEnabled || checkoutMode ? <ConfirmPackage accessToken={customerSession?.accessToken} /> : (
               <UnavailablePage
                 title="Checkout"
                 message="Live checkout is currently unavailable."

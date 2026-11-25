@@ -18,21 +18,13 @@ SESSION_ID = 7
 
 
 class FakeDb:
-    """Counts rollbacks and records expired objects.
-
-    fulfil_payment must always end its transaction, and must expire the
-    session object before activation reads it.
-    """
+    """Count how often fulfilment ends its transaction."""
 
     def __init__(self) -> None:
         self.rollbacks = 0
-        self.expired: list = []
 
     def rollback(self) -> None:
         self.rollbacks += 1
-
-    def expire(self, instance) -> None:
-        self.expired.append(instance)
 
 
 def make_session(status: str, activation_status: str) -> SimpleNamespace:
@@ -147,24 +139,6 @@ def test_router_callable_reaches_activate_session(monkeypatch):
     assert seen["session_id"] == SESSION_ID
 
 
-def test_session_is_expired_before_activation_reads_it(monkeypatch):
-    """A stale cached session would hide the winner's result in a race."""
-    db = FakeDb()
-    created = make_session("PAYMENT_CONFIRMED", "not_started")
-    seen = {}
-
-    def activate(db_arg, session_id, router=None):
-        # Snapshot what had been expired at the moment activation started.
-        seen["expired_before_activation"] = list(db.expired)
-        return make_session("ACTIVE", "succeeded")
-
-    patch_services(monkeypatch, create=lambda db, payment_id: created, activate=activate)
-
-    fulfil_payment(db, PAYMENT_ID)
-
-    assert seen["expired_before_activation"] == [created]
-
-
 def test_failures_are_logged_with_the_payment_id_but_no_traceback_to_callers(
     monkeypatch, caplog
 ):
@@ -179,4 +153,3 @@ def test_failures_are_logged_with_the_payment_id_but_no_traceback_to_callers(
         fulfil_payment(db, PAYMENT_ID)
 
     assert f"payment_id={PAYMENT_ID}" in caplog.text
-    

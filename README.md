@@ -88,6 +88,40 @@ When unset, the portal requests `/api/packages/` on the same origin. Set
 `VITE_API_BASE_URL` at build time if the production API uses a different origin,
 and add the frontend origin to the API's `CORS_ORIGINS`.
 
+### Test a checkout and see the expiry
+
+See the [pilot handover checklist](docs/pilot-handover.md) for a clean setup and acceptance steps.
+
+Use a disposable database with one customer, one staff account and an active
+hotspot package. Apply migrations before starting the API. For a simulated
+checkout, set `ENABLE_MOCK_PAYMENTS=true` and `ROUTER_MODE=mock` on the backend.
+Leave Daraja sandbox payments and direct device verification off. Run the
+customer portal in development mode with `VITE_ENABLE_MOCK_CHECKOUT=true`,
+`VITE_SANDBOX_PACKAGE_ID` set to the test package ID, and demo records off.
+The paid screen identifies the simulated payment, and the connection screen
+identifies simulated access.
+
+In another terminal with the same database settings, run this from `backend/`:
+
+```sh
+python -m app.expire_sessions
+```
+
+Keep this process running throughout the test. In the portal, open the package,
+sign in, simulate payment and open the connection status. In the staff dashboard,
+find the matching payment and session. Wait for the package to end and refresh
+Sessions to check its expired status. No money or router is involved in this mode.
+
+For a separately configured lab with Daraja sandbox and MikroTik, turn mock
+payments off. Enable `ENABLE_DARAJA_SANDBOX_PAYMENTS` and
+`ENABLE_DIRECT_HOTSPOT_CHECKOUT`, and set `ROUTER_MODE=mikrotik`. The
+customer build uses `VITE_ENABLE_SANDBOX_CHECKOUT=true`,
+`VITE_REQUIRE_HOTSPOT_DEVICE=true` and the test package ID. The customer API
+needs a direct connection from the hotspot device. Start Uvicorn with
+`--no-proxy-headers` and use a separate HTTPS ingress for Daraja's callback.
+Keep the expiry process on while access is enabled. The Daraja integration
+supports sandbox only.
+
 ## Batch 3 · Run checks and start your Jira task
 
 ```sh

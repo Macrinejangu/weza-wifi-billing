@@ -108,4 +108,3 @@ def test_crashing_fulfilment_changes_neither_reply_nor_payment(db, payment):
     assert result.fulfilment is FulfilmentOutcome.UNEXPECTED_ERROR
     db.expire_all()
     assert db.get(Payment, pid).status == "successful"
-    

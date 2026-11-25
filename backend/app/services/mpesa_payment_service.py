@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import NoReturn, Protocol
 
-from sqlalchemy import select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -35,9 +35,10 @@ from app.integrations.mpesa.errors import (
     DarajaRejectedError,
     DarajaTimeoutError,
 )
-from app.models import Payment, Purchase
+from app.models import Payment, Purchase, User
 from app.payments.masking import mask_phone
 from app.payments.payment_service_errors import (
+    AccessAlreadyReserved,
     OutcomeUnknown,
     PaymentAlreadyPending,
     ProviderNotReached,
@@ -72,6 +73,34 @@ class StartedPayment:
     phone_number: str = field(repr=False)
 
 
+def ensure_no_overlapping_payment(db: Session, purchase: Purchase) -> None:
+    # Serialize checkout by account and, when available, the verified device.
+    db.execute(select(User.id).where(User.id == purchase.user_id).with_for_update())
+    overlapping = Purchase.user_id == purchase.user_id
+    if purchase.device_mac_address:
+        db.execute(select(func.pg_advisory_xact_lock(
+            func.hashtext(f"weza-payment-device:{purchase.device_mac_address}")
+        )))
+        overlapping = or_(overlapping, Purchase.device_mac_address == purchase.device_mac_address)
+
+    access_ends = Payment.paid_at + func.make_interval(0, 0, 0, 0, 0, Purchase.duration_minutes)
+    existing = db.scalar(
+        select(Payment.id)
+        .join(Purchase, Purchase.id == Payment.purchase_id)
+        .where(
+            Purchase.id != purchase.id,
+            overlapping,
+            or_(
+                Payment.status.in_((PaymentStatus.PENDING.value, PaymentStatus.EXPIRED.value)),
+                (Payment.status == PaymentStatus.SUCCESSFUL.value) & (access_ends > datetime.now(timezone.utc)),
+            ),
+        )
+        .limit(1)
+    )
+    if existing is not None:
+        raise AccessAlreadyReserved()
+
+
 def start_payment(db: Session, purchase_id: int, phone_number: str) -> StartedPayment:
     """Record a pending payment for a purchase, or raise a typed error.
 
@@ -99,6 +128,8 @@ def start_payment(db: Session, purchase_id: int, phone_number: str) -> StartedPa
     if purchase.status != PURCHASE_PENDING:
         db.rollback()
         raise PurchaseNotPayable()
+
+    ensure_no_overlapping_payment(db, purchase)
 
     # Read what we need now: commit() expires the object.
     amount = purchase.amount

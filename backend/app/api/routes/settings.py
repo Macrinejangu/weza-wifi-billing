@@ -8,7 +8,7 @@ from pydantic import BaseModel, StringConstraints, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.auth import STAFF_ROLES, current_staff
+from app.api.auth import STAFF_ROLES, current_staff, require_admin
 from app.config import ROOT_ENV
 from app.db.session import get_db
 from app.models import AdminAuditLog, SystemSettings, User
@@ -50,12 +50,6 @@ class AuditEntry(BaseModel):
     action: str
     entity_type: str
     entity_id: int | None
-
-
-def require_admin(staff: User = Depends(current_staff)) -> User:
-    if staff.role != "admin":
-        raise HTTPException(403, "Administrator access required")
-    return staff
 
 
 def settings_row(db: Session, *, lock: bool = False) -> SystemSettings:

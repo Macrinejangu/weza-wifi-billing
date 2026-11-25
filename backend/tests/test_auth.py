@@ -105,6 +105,7 @@ PACKAGE_PAYLOAD = {
     ("customer", "active", 60, 403),
     ("operator", "suspended", 60, 401),
     ("operator", "active", -1, 401),
+    ("operator", "active", 60, 403),
 ])
 def test_package_writes_reject_unauthorized_requests(client, db, package, role, status, minutes, expected):
     headers = {}
@@ -120,15 +121,12 @@ def test_package_writes_reject_unauthorized_requests(client, db, package, role, 
     assert db.query(type(package)).count() == 1
 
 
-@pytest.mark.parametrize("role", ["operator", "admin"])
-def test_staff_package_writes_require_mock_mode(client, db, monkeypatch, role):
-    add_user(db, role=role)
+def test_admin_manages_packages_when_mock_payments_are_off(client, db, monkeypatch):
+    add_user(db, role="admin")
     token = login(client).json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
     monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
-    assert client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers).status_code == 404
 
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
     invalid_package = {**PACKAGE_PAYLOAD, "duration_minutes": 0}
     assert client.post("/api/packages/", json=invalid_package, headers=headers).status_code == 422
     created = client.post("/api/packages/", json=PACKAGE_PAYLOAD, headers=headers)
@@ -136,16 +134,13 @@ def test_staff_package_writes_require_mock_mode(client, db, monkeypatch, role):
     path = f"/api/packages/{created.json()['id']}"
     updated_package = {**PACKAGE_PAYLOAD, "price": 30, "is_active": True}
 
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "false")
-    assert client.put(path, json=updated_package, headers=headers).status_code == 404
-    assert client.delete(path, headers=headers).status_code == 404
-    assert client.get("/api/packages/").json()[0]["price"] == 20
-
-    monkeypatch.setenv("ENABLE_MOCK_PAYMENTS", "true")
     updated = client.put(path, json=updated_package, headers=headers)
     assert updated.status_code == 200 and updated.json()["price"] == 30
+    assert client.get("/api/packages/").json()[0]["price"] == 30
     assert client.delete(path, headers=headers).status_code == 200
     assert client.get("/api/packages/").json() == []
+    staff_catalogue = client.get("/api/packages/staff", headers=headers)
+    assert staff_catalogue.json()[0]["is_active"] is False
 
 
 @pytest.mark.parametrize("stored_hash", ["missing-separator", "z" * 32 + "$" + "0" * 128,
@@ -328,7 +323,7 @@ def test_connection_issues_require_active_staff(client, db):
     assert client.get("/api/connection-issues", headers={"Authorization": f"Bearer {create_token(suspended.id)}"}).status_code == 401
 
 
-def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostics(client, db, user, package):
+def test_connection_issues_show_paid_customers_waiting_or_failed_without_raw_diagnostics(client, db, user, package):
     staff = add_user(db)
     headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
     assert client.get("/api/connection-issues", headers=headers).json() == []
@@ -350,7 +345,9 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
 
     payment, failed = create_session("paid-failed", "successful", "failed", "FAILED")
     create_session("unpaid-failed", "pending", "failed", "FAILED")
-    create_session("paid-waiting", "successful", "waiting", "ACTIVATING")
+    waiting_payment, waiting = create_session("paid-waiting", "successful", "waiting", "ACTIVATING")
+    missing_purchase = make_purchase(db, user, package, key="paid-no-session")
+    missing_payment = make_payment(db, missing_purchase, checkout="paid-no-session", status="successful")
     db.add_all([
         ActivationAttempt(session_id=failed.id, attempt_number=1, status="failed", error_code="RouterActivationError"),
         ActivationAttempt(session_id=failed.id, attempt_number=2, status="failed", error_code="TimeoutError", error_message="internal diagnostic text"),
@@ -359,7 +356,13 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
 
     response = client.get("/api/connection-issues", headers=headers)
     assert response.status_code == 200
-    [issue] = response.json()
+    issues = {record["payment_id"]: record for record in response.json()}
+    assert set(issues) == {payment.id, waiting_payment.id, missing_payment.id}
+    assert issues[waiting_payment.id]["session_id"] == waiting.id
+    assert issues[waiting_payment.id]["activation_status"] == "waiting"
+    assert issues[missing_payment.id]["session_id"] is None
+    assert issues[missing_payment.id]["activation_status"] == "not_started"
+    issue = issues[payment.id]
     assert issue["session_id"] == failed.id
     assert issue["customer_id"] == user.id
     assert issue["payment_id"] == payment.id
@@ -368,7 +371,7 @@ def test_connection_issues_show_only_paid_failed_sessions_without_raw_diagnostic
     assert issue["activation_status"] == "failed"
     assert issue["failure_reason"] == "The activation request timed out."
     assert "internal diagnostic text" not in response.text
-    assert client.get("/api/connection-issues?offset=1", headers=headers).json() == []
+    assert client.get("/api/connection-issues?offset=3", headers=headers).json() == []
 
 
 def test_customer_login_reads_only_its_own_profile(client, db):

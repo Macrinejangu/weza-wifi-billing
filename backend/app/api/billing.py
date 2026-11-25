@@ -1,22 +1,29 @@
 import logging
+import os
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import current_customer
+from app.api.mock_mode import require_mock_mode
 from app.core.security import create_device_reference, read_device_reference
 from app.db.session import get_db
-from app.models import Payment, Purchase, User
+from app.models import Payment, Purchase, User, WiFiSession
 from app.schemas.billing import (
-    CheckoutIn, CustomerCheckoutIn, CustomerPaymentRead, CustomerPurchaseIn,
+    CheckoutIn, CustomerCheckoutIn, CustomerConnectionRead, CustomerMockPaymentRead,
+    CustomerPaymentRead, CustomerPurchaseIn,
     DeviceReferenceOut, MockPaymentIn, PaymentOut, PurchaseIn, PurchaseOut,
 )
 from app.services.device_identity import (
     checkout_device_verification_enabled, resolve_hotspot_device, validate_client_ip,
 )
 from app.services.mock_payment import process_mock_payment
+from app.services.payment_fulfilment import fulfil_payment
 from app.services.payment_service import create_payment
+from app.services.mpesa_payment_service import ensure_no_overlapping_payment
+from app.payments.payment_service_errors import AccessAlreadyReserved
 from app.services.purchase_service import create_purchase
 
 logger = logging.getLogger(__name__)
@@ -117,7 +124,7 @@ def new_customer_purchase(
     )
 
 
-@customer_router.get("/payments/{payment_id}", response_model=CustomerPaymentRead)
+@customer_router.get("/payments/{payment_id}", response_model=CustomerPaymentRead, response_model_exclude_defaults=True)
 def get_customer_payment(
     payment_id: int, response: Response,
     customer: User = Depends(current_customer),
@@ -139,10 +146,111 @@ def get_customer_payment(
         status=payment.status,
         amount=payment.amount,
         package_name=package_name,
+        simulated=(payment.raw_callback or {}).get("mock") is True,
         mpesa_receipt_number=(
             payment.mpesa_receipt_number if payment.status == "successful" else None
         ),
     )
+
+
+@customer_router.get("/connection", response_model=CustomerConnectionRead | None)
+def get_customer_connection(
+    response: Response,
+    payment_id: int | None = Query(default=None, ge=1, le=2147483647),
+    customer: User = Depends(current_customer),
+    db: Session = Depends(get_db),
+):
+    statement = (
+        select(Payment, Purchase, WiFiSession)
+        .join(Purchase, Purchase.id == Payment.purchase_id)
+        .outerjoin(WiFiSession, WiFiSession.payment_id == Payment.id)
+        .where(Purchase.user_id == customer.id)
+    )
+    if payment_id is None:
+        statement = statement.where(Payment.status == "successful").order_by(
+            Payment.paid_at.desc().nulls_last(), Payment.id.desc(),
+        ).limit(1)
+    else:
+        statement = statement.where(Payment.id == payment_id)
+
+    response.headers["Cache-Control"] = "no-store"
+    result = db.execute(statement).one_or_none()
+    if result is None:
+        if payment_id is None:
+            return None
+        raise HTTPException(404, "Payment not found")
+
+    payment, purchase, session = result
+    now = datetime.now(UTC)
+    paid = payment.status == "successful"
+    started = payment.paid_at if paid else None
+    expires = started + timedelta(minutes=purchase.duration_minutes) if started is not None else None
+    if paid and session is not None and session.subscription is not None:
+        started = session.subscription.start_date
+        expires = session.subscription.end_date
+    status = "unconfirmed"
+    if paid:
+        if (expires is not None and expires <= now) or (session and session.status == "EXPIRED"):
+            status = "expired"
+        elif session and session.status == "ACTIVE" and session.activation_status == "succeeded":
+            status = "active"
+        elif session and session.activation_status == "failed":
+            status = "failed"
+        else:
+            status = "activating"
+
+    return CustomerConnectionRead(
+        payment_id=payment.id,
+        payment_status=payment.status,
+        access_status=status,
+        package_name=purchase.package_name,
+        mpesa_receipt_number=payment.mpesa_receipt_number if paid else None,
+        started_at=started,
+        expires_at=expires,
+        server_now=now,
+        simulated=(payment.raw_callback or {}).get("mock") is True,
+    )
+
+
+@customer_router.post(
+    "/payments/mock", response_model=CustomerMockPaymentRead, dependencies=[Depends(require_mock_mode)]
+)
+def mock_customer_payment(
+    data: MockPaymentIn,
+    customer: User = Depends(current_customer),
+    db: Session = Depends(get_db),
+):
+    if (
+        os.getenv("ROUTER_MODE", "").strip().lower() != "mock"
+        or os.getenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", "false").lower() == "true"
+    ):
+        raise HTTPException(404, "Not found")
+    purchase = db.scalar(
+        select(Purchase).where(Purchase.id == data.purchase_id, Purchase.user_id == customer.id)
+        .with_for_update()
+    )
+    if purchase is None:
+        raise HTTPException(404, "Purchase not found")
+
+    payment = db.scalar(select(Payment).where(
+        Payment.purchase_id == purchase.id, Payment.status == "successful",
+    ))
+    if payment is None:
+        try:
+            ensure_no_overlapping_payment(db, purchase)
+        except AccessAlreadyReserved as error:
+            raise HTTPException(409, error.message) from None
+        payment = create_payment(db, purchase.id, data.phone_number, commit=False)
+        payment = process_mock_payment(db, payment.id, data.successful)
+    elif (payment.raw_callback or {}).get("mock") is not True:
+        raise HTTPException(409, "Purchase already paid")
+
+    result = CustomerMockPaymentRead(
+        payment_id=payment.id, purchase_id=purchase.id, status=payment.status,
+    )
+    if payment.status == "successful":
+        fulfil_payment(db, payment.id)
+    return result
 
 
 @router.post("/payments/mock", response_model=PaymentOut)

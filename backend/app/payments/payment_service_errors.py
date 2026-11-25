@@ -57,6 +57,13 @@ class PaymentAlreadyPending(PaymentServiceError):
         super().__init__(payment_id=payment_id)
 
 
+class AccessAlreadyReserved(PaymentServiceError):
+    """A separate purchase still has a payment or paid access in progress."""
+
+    code = "access_already_reserved"
+    message = "This account or device already has a payment or active package. Check the existing purchase before paying again."
+
+
 class ProviderRejected(PaymentServiceError):
     """Daraja refused the request, so no prompt was sent.
 
