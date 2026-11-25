@@ -22,6 +22,7 @@ class AccessPoint(TimestampMixin, Base):
     name = Column(String(100), nullable=False)
     location = Column(String(150), nullable=True)
     mac_address = Column(String(50), unique=True, nullable=True)
+    management_ip = Column(String(45))
 
     status = Column(
         String(20),

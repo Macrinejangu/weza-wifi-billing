@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { getStaffPayment, listStaffPayments, StaffSessionError } from '../api.js'
 import '../styles/payments.css'
+import ManualStkDialog from './ManualStkDialog.jsx'
 
 const pageSize = 50
 const paymentDate = new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' })
@@ -325,6 +326,7 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile, i
   const [showFilterRules, setShowFilterRules] = useState(false)
   const [inspection, setInspection] = useState(null)
   const [notice, setNotice] = useState('')
+  const [manualStk, setManualStk] = useState(false)
 
   useEffect(() => {
     if (!accessToken) return undefined
@@ -400,6 +402,7 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile, i
         </div>
         <div className="payment-monitor-heading-actions">
           {live && <button type="button" className="payment-secondary-button" disabled={liveList.loading} onClick={() => changeList(page)}>Refresh</button>}
+          {live && isAdmin && <button type="button" className="payment-secondary-button" onClick={() => setManualStk(true)}>Manual STK</button>}
           {!live && <button type="button" className="payment-secondary-button" onClick={() => setNotice('Manual STK is a preview only. No payment prompt was sent.')}>
             <span className="material-symbols-outlined" aria-hidden="true">sensors</span>Manual STK
           </button>}
@@ -533,6 +536,14 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile, i
           onClose={() => setInspection(null)}
         />
       )}
+      {manualStk && isAdmin && <ManualStkDialog accessToken={accessToken} onClose={() => setManualStk(false)}
+        onSignOut={onSignOut} onSent={(result) => {
+          setManualStk(false)
+          changeList(0, 'Pending')
+          setNotice(result.simulated
+            ? 'Prompt simulated. No message was sent. Payment is pending.'
+            : 'Daraja accepted the test prompt. Payment is pending.')
+        }} />}
     </section>
   )
 }

@@ -304,6 +304,7 @@ def test_staff_network_inventory_returns_saved_records_and_empty_lists(client, d
     inventory = response.json()
     assert inventory["routers"] == [{
         "id": router.id, "name": "Audit Router", "identity": "audit-router", "status": "online",
+        "last_synced_at": None, "hotspot_enabled": None,
     }]
     [record] = inventory["access_points"]
     assert record == {
