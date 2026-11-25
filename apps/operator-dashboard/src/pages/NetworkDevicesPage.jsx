@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
-import { getStaffNetworkInventory, StaffSessionError } from '../api.js'
+import { getStaffNetworkInventory, runPingSweep, StaffSessionError, syncGatewayState } from '../api.js'
 import '../styles/network-devices.css'
 
 const dateTime = new Intl.DateTimeFormat('en-KE', {
@@ -16,6 +16,8 @@ function toDevices({ routers, access_points: accessPoints }) {
       id: router.name,
       type: 'Core gateway',
       identity: router.identity,
+      heartbeat: router.last_synced_at ? dateTime.format(new Date(router.last_synced_at)) : null,
+      hotspot: router.hotspot_enabled == null ? null : router.hotspot_enabled ? "Enabled" : "Disabled",
       status: deviceStatusLabels[router.status.toLowerCase()] ?? 'Unknown',
     })),
     ...accessPoints.map((point) => ({
@@ -144,7 +146,7 @@ function DeviceDetails({ device, opener, onClose, live }) {
         <footer>
           <p>{live ? 'Device diagnostics are unavailable.' : 'Diagnostics are unavailable in demo mode.'}</p>
           <div className="network-device-actions">
-            <button type="button" disabled>Run Ping Test</button>
+            {!live && <button type="button" disabled>Run Ping Test</button>}
             <button type="button" className="network-device-primary" onClick={onClose}>Close Drawer</button>
           </div>
         </footer>
@@ -153,8 +155,8 @@ function DeviceDetails({ device, opener, onClose, live }) {
   )
 }
 
-export default function NetworkDevicesPage({ accessToken, onSignOut } = {}) {
-  return accessToken || demoDataEnabled ? <NetworkInventory accessToken={accessToken} onSignOut={onSignOut} /> : (
+export default function NetworkDevicesPage({ accessToken, onSignOut, isAdmin = false } = {}) {
+  return accessToken || demoDataEnabled ? <NetworkInventory accessToken={accessToken} onSignOut={onSignOut} isAdmin={isAdmin} /> : (
     <section className="network-devices-page">
       <h1>Network &amp; Devices</h1>
       <p role="status">Network inventory is currently unavailable.</p>
@@ -162,10 +164,33 @@ export default function NetworkDevicesPage({ accessToken, onSignOut } = {}) {
   )
 }
 
-function NetworkInventory({ accessToken, onSignOut }) {
+function NetworkInventory({ accessToken, onSignOut, isAdmin }) {
   const live = Boolean(accessToken)
   const [inventory, setInventory] = useState({ records: [], loading: live })
   const [reload, setReload] = useState(0)
+  const [running, setRunning] = useState('')
+  const [checkError, setCheckError] = useState('')
+  const [sweep, setSweep] = useState(null)
+  const [gateway, setGateway] = useState(null)
+
+  async function runCheck(action) {
+    if (running) return
+    setRunning(action)
+    setCheckError('')
+    try {
+      if (action === 'sweep') setSweep(await runPingSweep(accessToken))
+      else {
+        const result = await syncGatewayState(accessToken)
+        setGateway(result)
+        if (!result.simulated) setReload((attempt) => attempt + 1)
+      }
+    } catch (failure) {
+      if (failure instanceof StaffSessionError) onSignOut?.()
+      else setCheckError(failure.message)
+    } finally {
+      setRunning('')
+    }
+  }
 
   useEffect(() => {
     if (!accessToken) return undefined
@@ -213,7 +238,7 @@ function NetworkInventory({ accessToken, onSignOut }) {
     ['Registered Routers', known ? gateways.length : 'Unavailable', 'Saved router inventory'],
     ['Access Points Recorded Online', known ? devices.filter((device) => device.type === 'Access point' && device.status === 'Online').length : 'Unavailable', 'Last saved status'],
     ['Devices Recorded Offline', known ? devices.filter((device) => device.status === 'Offline').length : 'Unavailable', 'Last saved status'],
-    ['Network Integration Status', 'Inventory', 'Live health checks unavailable'],
+    ['Network Integration Status', 'Inventory', 'Run an administrator check for a current reading'],
   ] : [
     ['Connected Routers', `${gateways.filter((device) => device.status === 'Online').length}/${gateways.length}`, 'Core gateways online'],
     ['Online Access Points', sampleDevices.filter((device) => device.type === 'Access point' && device.status === 'Online').length, 'Access points online'],
@@ -233,11 +258,37 @@ function NetworkInventory({ accessToken, onSignOut }) {
           {live ? (
             <button type="button" className="network-device-primary" disabled={inventory.loading} onClick={refresh}>Refresh</button>
           ) : <span className="network-fixed-label">Fixed snapshot</span>}
-          <button type="button" className="network-ping-sweep" disabled>Run Ping Sweep</button>
-          <button type="button" disabled>Sync Gateway State</button>
+          {live && isAdmin && <>
+            <button type="button" className="network-ping-sweep" disabled={Boolean(running)} onClick={() => runCheck('sweep')}>
+              {running === 'sweep' ? 'Checking devices…' : 'Run Ping Sweep'}
+            </button>
+            <button type="button" disabled={Boolean(running)} onClick={() => runCheck('sync')}>
+              {running === 'sync' ? 'Syncing…' : 'Sync Gateway State'}
+            </button>
+          </>}
+          {!live && <>
+            <button type="button" className="network-ping-sweep" disabled>Run Ping Sweep</button>
+            <button type="button" disabled>Sync Gateway State</button>
+          </>}
         </div>
       </div>
       {!live && <p className="network-device-demo"><strong>Demo data.</strong> This inventory is a fixed sample. Live sync and diagnostics are unavailable.</p>}
+
+      {checkError && <p role="alert">{checkError}</p>}
+      {gateway && <p role="status">
+        {gateway.simulated ? 'Simulated gateway reading' : 'Gateway synced'} · {gateway.identity} · Hotspot {gateway.hotspot_enabled ? 'enabled' : 'disabled'} · {dateTime.format(new Date(gateway.checked_at))}
+      </p>}
+      {sweep && <section className="network-device-card" aria-label="Ping sweep results" aria-live="polite">
+        <h2>{sweep.simulated ? 'Simulated ping sweep' : 'Ping sweep results'}</h2>
+        <p>{dateTime.format(new Date(sweep.checked_at))} · A device may be online without answering a ping.</p>
+        {sweep.results.length ? <ul>
+          {sweep.results.map(({ key, name, result }) => <li key={key}>{name} · {({
+            reachable: 'Reachable', no_response: 'No response', no_address: 'No address',
+            unsupported_address: 'No supported management address', unavailable: 'Check unavailable',
+          })[result]}</li>)}
+        </ul> : <p>No devices are registered.</p>}
+        {sweep.truncated && <p>Showing the first 20 routers and 20 access points.</p>}
+      </section>}
 
       <section className="network-device-metrics" aria-label="Inventory totals">
         {metrics.map(([label, value, description]) => (
@@ -272,7 +323,7 @@ function NetworkInventory({ accessToken, onSignOut }) {
               {visible.map((device) => (
                 <tr key={device.key ?? device.id}>
                   <th scope="row">{device.id}<small>{live ? device.identity || device.mac : device.address}</small></th>
-                  <td>{device.type}</td><td>{device.site || 'Unavailable'}</td><td><DeviceStatus status={device.status} /></td><td>{device.heartbeat || 'Unavailable'}</td>
+                  <td>{device.type}</td><td>{device.site || 'Unavailable'}</td><td><DeviceStatus status={device.status} /></td><td>{device.heartbeat || 'Unavailable'}{device.hotspot && <small> · Hotspot {device.hotspot.toLowerCase()}</small>}</td>
                   <td><button type="button" aria-label={`View device ${device.id}`} onClick={(event) => setInspection({ device, opener: event.currentTarget })}>View Drawer</button></td>
                 </tr>
               ))}

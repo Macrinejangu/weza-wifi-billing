@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
 import { listStaffCustomers, StaffSessionError } from '../api.js'
 import '../styles/customers.css'
+import StaffCustomerEditor from './StaffCustomerEditor.jsx'
 
 export const initialCustomers = demoDataEnabled ? [
   { id: 'CUS-001842', name: 'Amina Wanjiku', phone: '+254 712 345 678', mpesaVerified: true, status: 'Active', plan: 'Premium Plan', price: 2500, used: 18.4, quota: 50 },
@@ -30,6 +31,7 @@ function toCustomer(record) {
     id: String(record.id),
     name: record.full_name,
     phone: record.phone || 'Unavailable',
+    storedPhone: record.phone,
     status: record.status.charAt(0).toUpperCase() + record.status.slice(1),
     registeredOn: record.created_at,
   }
@@ -39,7 +41,7 @@ function initials(name) {
   return name.split(/\s+/).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
 }
 
-function CustomerDialog({ customer, onClose, onRegister, live }) {
+function CustomerDialog({ customer, onClose, onRegister, live, onEdit }) {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [plan, setPlan] = useState('Basic Plan')
@@ -83,7 +85,10 @@ function CustomerDialog({ customer, onClose, onRegister, live }) {
             )}
           </div>
           {!live && <p className="customer-modal-note">Demonstration profile. No live subscriber account is connected.</p>}
-          <button type="button" className="customer-primary-button modal-action" onClick={closeDialog}>Close profile</button>
+          <div className="customer-modal-actions">
+            {onEdit && <button type="button" className="customer-primary-button" onClick={onEdit}>Edit customer</button>}
+            <button type="button" className="customer-secondary-button" onClick={closeDialog}>Close profile</button>
+          </div>
         </dialog>
     )
   }
@@ -157,7 +162,7 @@ function dateLabel(date, live = false) {
     .format(new Date(date))
 }
 
-export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } = {}) {
+export default function CustomersPage({ onOpenProfile, accessToken, onSignOut, isAdmin = false } = {}) {
   const live = Boolean(accessToken)
   const showDemo = !live && demoDataEnabled
   const [customers, setCustomers] = useState(() => showDemo ? initialCustomers : [])
@@ -179,6 +184,7 @@ export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } 
     setRequest({ loading: true })
     listStaffCustomers(accessToken, {
       query: liveQuery,
+      registeredOn,
       status: status === 'All' ? undefined : status.toLowerCase(),
       limit: pageSize + 1,
       offset: (page - 1) * pageSize,
@@ -193,7 +199,7 @@ export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } 
       else setRequest({ error: 'Could not load customers. Please try again.' })
     })
     return () => controller.abort()
-  }, [accessToken, liveQuery, onSignOut, page, reload, status])
+  }, [accessToken, liveQuery, onSignOut, page, registeredOn, reload, status])
 
   const term = search.trim().toLowerCase()
   const phoneTerm = term.replace(/\D/g, '')
@@ -242,7 +248,7 @@ export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } 
           <h1 id="customers-title">Customers</h1>
           <p className="page-description">{live ? 'Review registered customer accounts.' : 'View and manage registered customers, subscription status, and access records.'}</p>
         </div>
-        <button type="button" className="customer-primary-button" disabled={!showDemo} onClick={(event) => setDialog({ trigger: event.currentTarget })}>
+        <button type="button" className="customer-primary-button" disabled={!showDemo && !isAdmin} onClick={(event) => setDialog({ editor: live, trigger: event.currentTarget })}>
           <span className="material-symbols-outlined" aria-hidden="true">add</span>
           Register customer
         </button>
@@ -265,14 +271,14 @@ export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } 
         <div className="customer-filter-fields">
           <input type="search" aria-label="Search customers" placeholder="Search name, phone or customer ID"
             value={search} maxLength={live ? 100 : undefined} onChange={(event) => { setSearch(event.target.value); setPage(1) }} />
-          <select aria-label="Filter by package" disabled={!showDemo} value={packageName}
+          {showDemo && <select aria-label="Filter by package" value={packageName}
             onChange={(event) => { setPackageName(event.target.value); setPage(1) }}>
             <option value="">All packages</option>
             {packages.map((plan) => <option key={plan}>{plan}</option>)}
-          </select>
+          </select>}
           <label className="customer-date-filter">
             Registration date
-            <input type="date" disabled={!showDemo} value={registeredOn}
+            <input type="date" value={registeredOn}
               onChange={(event) => { setRegisteredOn(event.target.value); setPage(1) }} />
           </label>
         </div>
@@ -347,7 +353,13 @@ export default function CustomersPage({ onOpenProfile, accessToken, onSignOut } 
       </section>
 
       {showDemo && <p className="customer-data-footnote">Illustrative demo data. Registration lasts for this page visit.</p>}
-      {dialog && <CustomerDialog live={live} customer={dialog.customer} onClose={dismissDialog} onRegister={registerCustomer} />}
+      {dialog && (dialog.editor ? (
+        <StaffCustomerEditor customer={dialog.customer} accessToken={accessToken} onClose={dismissDialog}
+          onSaved={() => { resetFilters(); setReload((attempt) => attempt + 1); dismissDialog() }} onSignOut={onSignOut} />
+      ) : (
+        <CustomerDialog live={live} customer={dialog.customer} onClose={dismissDialog} onRegister={registerCustomer}
+          onEdit={live && isAdmin && dialog.customer ? () => setDialog({ ...dialog, editor: true }) : undefined} />
+      ))}
     </section>
   )
 }

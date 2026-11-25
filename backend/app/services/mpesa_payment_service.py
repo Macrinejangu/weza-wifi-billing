@@ -35,7 +35,7 @@ from app.integrations.mpesa.errors import (
     DarajaRejectedError,
     DarajaTimeoutError,
 )
-from app.models import Payment, Purchase, User
+from app.models import AdminAuditLog, Payment, Purchase, User
 from app.payments.masking import mask_phone
 from app.payments.payment_service_errors import (
     AccessAlreadyReserved,
@@ -101,7 +101,9 @@ def ensure_no_overlapping_payment(db: Session, purchase: Purchase) -> None:
         raise AccessAlreadyReserved()
 
 
-def start_payment(db: Session, purchase_id: int, phone_number: str) -> StartedPayment:
+def start_payment(
+    db: Session, purchase_id: int, phone_number: str, *, staff_id: int | None = None,
+) -> StartedPayment:
     """Record a pending payment for a purchase, or raise a typed error.
 
     Raises ValueError for malformed arguments (our own bug, nothing touched),
@@ -164,6 +166,11 @@ def start_payment(db: Session, purchase_id: int, phone_number: str) -> StartedPa
         raise PaymentAlreadyPending(payment_id=existing_id) from None
 
     payment_id = payment.id
+    if staff_id is not None:
+        db.add(AdminAuditLog(
+            admin_id=staff_id, action="Requested manual payment prompt",
+            entity_type="payment", entity_id=payment_id,
+        ))
     db.commit()
     logger.info(
         "payment initiated: payment_id=%s purchase_id=%s phone=%s",
@@ -328,7 +335,8 @@ def _raise_for_daraja_error(
 
 
 def initiate_payment(
-    db: Session, daraja: StkPusher, purchase_id: int, phone_number: str
+    db: Session, daraja: StkPusher, purchase_id: int, phone_number: str, *,
+    staff_id: int | None = None,
 ) -> InitiatedPayment:
     """Start a payment: record it, ask Daraja to prompt the customer, record
     what happened. Sends ONE push and never retries it.
@@ -338,7 +346,8 @@ def initiate_payment(
     (see the module docstring). A ValueError from the client means our own
     request was malformed: the payment is marked failed and the error re-raised.
     """
-    started = start_payment(db, purchase_id, phone_number)
+    actor = {} if staff_id is None else {"staff_id": staff_id}
+    started = start_payment(db, purchase_id, phone_number, **actor)
     reference = f"{ACCOUNT_REFERENCE_PREFIX}{started.payment_id}"
 
     # No transaction is open here: start_payment() committed. Nothing below

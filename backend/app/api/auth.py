@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_token, hash_password, read_token, verify_password
 from app.db.session import get_db
-from app.models import User
+from app.models import AdminAuditLog, User
 from app.schemas.payment import normalise_kenyan_mobile
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -97,6 +97,11 @@ def current_customer(
 
 @router.post("/customer/register", response_model=CustomerProfile, status_code=201)
 def register_customer(data: CustomerRegistration, db: Session = Depends(get_db)):
+    customer = create_customer_account(data, db)
+    return CustomerProfile(id=customer.id, full_name=customer.full_name, email=customer.email, phone=customer.phone)
+
+
+def create_customer_account(data: CustomerRegistration, db: Session, *, staff_id: int | None = None) -> User:
     password = data.password.get_secret_value()
     if not 8 <= len(password) <= 128 or not password.strip():
         raise HTTPException(422, "Use a password with 8 to 128 characters.")
@@ -120,6 +125,12 @@ def register_customer(data: CustomerRegistration, db: Session = Depends(get_db))
     )
     db.add(customer)
     try:
+        if staff_id is not None:
+            db.flush()
+            db.add(AdminAuditLog(
+                admin_id=staff_id, action="Registered customer",
+                entity_type="customer", entity_id=customer.id,
+            ))
         db.commit()
     except IntegrityError as error:
         db.rollback()
@@ -127,7 +138,7 @@ def register_customer(data: CustomerRegistration, db: Session = Depends(get_db))
             raise
         raise HTTPException(409, conflict_message) from None
     db.refresh(customer)
-    return CustomerProfile(id=customer.id, full_name=customer.full_name, email=customer.email, phone=customer.phone)
+    return customer
 
 
 @router.post("/customer/login")

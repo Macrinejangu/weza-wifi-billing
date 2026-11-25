@@ -111,13 +111,13 @@ export default function App() {
             onOpenIssues={() => setStaffPage('connection-issues')}
           />
         ) : staffPage === 'sessions' ? (
-          <SessionsPage accessToken={accessToken} onSignOut={signOut} />
+          <SessionsPage accessToken={accessToken} onSignOut={signOut} isAdmin={staff.role === "admin"} />
         ) : staffPage === 'packages' ? (
           <PackagesPage live accessToken={accessToken} canManage={staff.role === 'admin'} onSignOut={signOut} />
         ) : staffPage === 'customers' ? (
-          <CustomersPage accessToken={accessToken} onSignOut={signOut} />
+          <CustomersPage accessToken={accessToken} onSignOut={signOut} isAdmin={staff.role === "admin"} />
         ) : staffPage === 'network-devices' ? (
-          <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} />
+          <NetworkDevicesPage accessToken={accessToken} onSignOut={signOut} isAdmin={staff.role === "admin"} />
         ) : staffPage === 'connection-issues' ? (
           <ConnectionIssuesPage accessToken={accessToken} onSignOut={signOut} />
         ) : staffPage === 'settings' ? (
@@ -135,7 +135,7 @@ export default function App() {
         ) : staffPage === 'staff-profile' ? (
           <StaffProfilePage operator={operator} staff={staff} onSignOut={signOut} />
         ) : (
-          <PaymentsPage accessToken={accessToken} onSignOut={signOut} />
+          <PaymentsPage accessToken={accessToken} onSignOut={signOut} isAdmin={staff.role === "admin"} />
         )}
       </DashboardLayout>
     )

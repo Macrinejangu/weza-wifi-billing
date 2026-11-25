@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { demoDataEnabled } from '../../../shared/demoMode.js'
-import { getStaffPayment, listStaffSessions, StaffSessionError } from '../api.js'
+import { disconnectStaffSession, getStaffPayment, listStaffSessions, StaffSessionError } from '../api.js'
 import '../styles/sessions.css'
 
 const pageSize = 50
@@ -134,12 +134,36 @@ function initials(name) {
 }
 
 function escapeCsv(value) {
-  return `"${String(value ?? '').replaceAll('"', '""')}"`
+  const safeValue = typeof value === 'string' && /^[\s\uFEFF]*[=+@\-]|^[\t\r\n]/.test(value) ? "'" + value : value
+  return `"${String(safeValue ?? '').replaceAll('"', '""')}"`
 }
 
-function SessionDetails({ session, opener, onClose, accessToken, onSignOut }) {
+function SessionDetails({ session, opener, onClose, accessToken, onSignOut, isAdmin }) {
   const [paymentStatus, setPaymentStatus] = useState('Loading…')
+  const [confirming, setConfirming] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
+  const [disconnectNotice, setDisconnectNotice] = useState('')
+  const [disconnectError, setDisconnectError] = useState('')
   const paymentId = session.paymentId
+
+  async function disconnect() {
+    if (disconnecting) return
+    setDisconnecting(true)
+    setDisconnectError('')
+    setDisconnectNotice('')
+    try {
+      const result = await disconnectStaffSession(accessToken, session.id)
+      setConfirming(false)
+      setDisconnectNotice(result.simulated
+        ? 'Disconnect simulated. The customer keeps their paid time.'
+        : 'Disconnect completed. The customer may reconnect while paid time remains.')
+    } catch (failure) {
+      if (failure instanceof StaffSessionError) onSignOut?.()
+      else setDisconnectError(failure.message)
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   useEffect(() => {
     if (!accessToken) return undefined
@@ -296,18 +320,28 @@ function SessionDetails({ session, opener, onClose, accessToken, onSignOut }) {
 
         <footer className="session-drawer-footer">
           <div className="session-drawer-footer-row">
-            <button type="button" className="session-secondary-button" disabled>Send Renewal STK</button>
+            {!accessToken && <button type="button" className="session-secondary-button" disabled>Send Renewal STK</button>}
             <button ref={footerButtonRef} type="button" className="session-secondary-button" onClick={onClose}>Close details</button>
           </div>
-          <button type="button" className="session-drawer-disconnect" disabled>Terminate Session (Disconnect RADIUS)</button>
-          <p>{!accessToken && 'Demo mode. '}Renewal and disconnect are unavailable.</p>
+          {accessToken && isAdmin && session.status === 'Active' && (
+            confirming ? <>
+              <p>Disconnect this device now? The customer keeps their paid time and can reconnect.</p>
+              <button type="button" className="session-secondary-button" disabled={disconnecting} onClick={() => setConfirming(false)}>Cancel disconnect</button>
+              <button type="button" className="session-drawer-disconnect" disabled={disconnecting} onClick={disconnect}>
+                {disconnecting ? 'Disconnecting…' : 'Confirm disconnect'}
+              </button>
+            </> : <button type="button" className="session-drawer-disconnect" onClick={() => setConfirming(true)}>Disconnect device</button>
+          )}
+          {disconnectError && <p role="alert">{disconnectError}</p>}
+          {disconnectNotice && <p role="status">{disconnectNotice}</p>}
+          {!accessToken && <p>Demo mode. Renewal and disconnect are unavailable.</p>}
         </footer>
       </section>
     </div>
   )
 }
 
-export default function SessionsPage({ accessToken, onSignOut }) {
+export default function SessionsPage({ accessToken, onSignOut, isAdmin = false }) {
   const live = Boolean(accessToken)
   const showDemo = !live && demoDataEnabled
   const [page, setPage] = useState(0)
@@ -389,10 +423,10 @@ export default function SessionsPage({ accessToken, onSignOut }) {
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'weza-session-demo-records.csv'
+    anchor.download = live ? 'weza-sessions-page.csv' : 'weza-session-demo-records.csv'
     anchor.click()
     URL.revokeObjectURL(url)
-    setNotice(`Exported ${filteredSessions.length} illustrative session records.`)
+    setNotice(live ? 'Sessions on this page exported.' : `Exported ${filteredSessions.length} illustrative session records.`)
   }
 
   function clearFilters() {
@@ -423,9 +457,9 @@ export default function SessionsPage({ accessToken, onSignOut }) {
             <span className="material-symbols-outlined">filter_list</span>
             Filter Telemetry
           </button>
-          <button type="button" className="session-primary-button session-export-button" disabled={!showDemo} onClick={exportSessions}>
+          <button type="button" className="session-primary-button session-export-button" disabled={(!showDemo && !isAdmin) || (live && !filteredSessions.length)} onClick={exportSessions}>
             <span className="material-symbols-outlined">download</span>
-            Export Active Sessions
+            {live ? 'Export this page' : 'Export Active Sessions'}
           </button>
         </div>
       </div>
@@ -476,16 +510,17 @@ export default function SessionsPage({ accessToken, onSignOut }) {
                 </button>
               ))}
             </div>
-            <select disabled={!showDemo} aria-label="Filter sessions by package type" value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)}>
+            {showDemo && <><select aria-label="Filter sessions by package type" value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)}>
               <option value="All">All Packages</option>
               {showDemo && packageTypes.map((type) => <option key={type}>{type}</option>)}
             </select>
-            <select disabled={!showDemo} aria-label="Access point" id="session-node-filter" value={selectedNode} onChange={(event) => setSelectedNode(event.target.value)}>
+            <select aria-label="Access point" id="session-node-filter" value={selectedNode} onChange={(event) => setSelectedNode(event.target.value)}>
               <option value="All">All Nodes</option>
               {showDemo && [...new Set(initialSessions.map((session) => session.node))].map((node) => (
                 <option key={node}>{node}</option>
               ))}
             </select>
+            </>}
             {live ? <button type="button" className="session-secondary-button" disabled={liveList.loading} onClick={() => changeList(page)}>Refresh</button> : showDemo && <span className="sessions-refresh-label">Fixed snapshot</span>}
           </div>
         </div>
@@ -599,6 +634,7 @@ export default function SessionsPage({ accessToken, onSignOut }) {
           session={details.session}
           accessToken={accessToken}
           onSignOut={onSignOut}
+          isAdmin={isAdmin}
           opener={details.opener}
           onClose={() => setDetails(null)}
         />
