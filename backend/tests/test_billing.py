@@ -284,11 +284,15 @@ def test_sandbox_router_override_opens_only_for_true(monkeypatch, value, expecte
 
 @pytest.mark.parametrize("override", [None, "false", "", "1", "yes"])
 def test_sandbox_payment_cannot_open_a_live_router_without_the_override(
-    db, user, package, monkeypatch, override
+    db, user, package, monkeypatch, tmp_path, override
 ):
-    from app.services import session_service
+    from app.services import access_auth, session_service
 
     monkeypatch.setenv("ROUTER_MODE", "mikrotik")
+    # get_access_authenticator() loads the repository .env and load_dotenv fills any
+    # variable that is missing. Point it at a missing file so a lab .env that sets
+    # the override to "true" cannot change what this test proves.
+    monkeypatch.setattr(access_auth, "ROOT_ENV", tmp_path / "no-such.env")
     if override is None:
         monkeypatch.delenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", raising=False)
     else:
