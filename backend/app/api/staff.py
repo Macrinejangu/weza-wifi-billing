@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import current_staff, require_admin
 from app.db.session import get_db
-from app.models import AdminAuditLog, Payment, User, WiFiSession
+from app.models import AdminAuditLog, Payment, Purchase, Subscription, User, WiFiSession
 from app.services.access_auth import MikroTikAuthenticator, MockAuthenticator, get_access_authenticator
 from app.services.router import expire_hotspot_grant
-from app.services.session_service import lock_hotspot_device
+from app.services.session_service import connection_status, lock_hotspot_device
 
 # Every route in this file needs a staff login.
 router = APIRouter(prefix="/api", tags=["Staff"], dependencies=[Depends(current_staff)])
@@ -29,6 +29,8 @@ class PaymentRead(BaseModel):
     failure_reason: str | None
     paid_at: datetime | None
     created_at: datetime
+    access_status: str = "unconfirmed"
+    session_id: int | None = None
 
 
 class SessionRead(BaseModel):
@@ -45,21 +47,49 @@ class SessionRead(BaseModel):
     created_at: datetime
 
 
+def payment_with_access():
+    return (
+        select(Payment, Purchase.duration_minutes, WiFiSession, Subscription.end_date)
+        .join(Purchase, Purchase.id == Payment.purchase_id)
+        .outerjoin(WiFiSession, WiFiSession.payment_id == Payment.id)
+        .outerjoin(Subscription, Subscription.id == WiFiSession.subscription_id)
+    )
+
+
+def read_payment_access(
+    payment: Payment, duration: int, session: WiFiSession | None,
+    subscription_end: datetime | None, *, now: datetime,
+) -> PaymentRead:
+    expires_at = subscription_end or (session.expires_at if session else None)
+    if expires_at is None and payment.paid_at is not None:
+        expires_at = payment.paid_at + timedelta(minutes=duration)
+    access_status = connection_status(payment.status == "successful", session, expires_at, now)
+    if (session is not None and access_status not in ("unconfirmed", "expired")
+            and (session.ended_at is not None or session.status == "CANCELLED")):
+        access_status = "ended"
+    return PaymentRead.model_validate(payment).model_copy(update={
+        "access_status": access_status,
+        "session_id": session.id if session else None,
+    })
+
+
 @router.get("/payments", response_model=list[PaymentRead])
 def list_payments(status: str | None = None, limit: int = Query(50, ge=1, le=100),
                   offset: int = Query(0, ge=0), db: Session = Depends(get_db)):
-    query = db.query(Payment)
+    query = payment_with_access()
     if status:
-        query = query.filter_by(status=status)
-    return query.order_by(Payment.id.desc()).limit(limit).offset(offset).all()
+        query = query.where(Payment.status == status)
+    rows = db.execute(query.order_by(Payment.id.desc()).limit(limit).offset(offset))
+    now = datetime.now(UTC)
+    return [read_payment_access(*row, now=now) for row in rows]
 
 
 @router.get("/payments/{payment_id}", response_model=PaymentRead)
 def get_payment(payment_id: int, db: Session = Depends(get_db)):
-    payment = db.get(Payment, payment_id)
-    if payment is None:
+    row = db.execute(payment_with_access().where(Payment.id == payment_id)).one_or_none()
+    if row is None:
         raise LookupError("Payment not found")  # main.py turns this into a 404
-    return payment
+    return read_payment_access(*row, now=datetime.now(UTC))
 
 
 @router.get("/sessions", response_model=list[SessionRead])

@@ -7,6 +7,10 @@ import ManualStkDialog from './ManualStkDialog.jsx'
 const pageSize = 50
 const paymentDate = new Intl.DateTimeFormat('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Africa/Nairobi' })
 const paymentStatuses = { all: '', Confirmed: 'successful', Pending: 'pending', Failed: 'failed' }
+const accessStatuses = {
+  unconfirmed: 'Not started', activating: 'Awaiting activation',
+  active: 'Complete', failed: 'Failed', expired: 'Expired', ended: 'Ended',
+}
 
 function toTransaction(record) {
   return {
@@ -17,6 +21,8 @@ function toTransaction(record) {
     receipt: record.mpesa_receipt_number,
     reference: record.checkout_request_id,
     paymentStatus: { successful: 'Confirmed', pending: 'Pending', failed: 'Failed' }[record.status] ?? record.status,
+    provisioningStatus: accessStatuses[record.access_status] ?? 'Unavailable',
+    sessionId: record.session_id,
     time: record.created_at ? paymentDate.format(new Date(record.created_at)) : 'Unavailable',
     paidAt: record.paid_at ? paymentDate.format(new Date(record.paid_at)) : 'Unavailable',
     failureReason: record.failure_reason,
@@ -49,12 +55,12 @@ function StatusPill({ status, type = 'payment' }) {
   if (status === 'Unavailable') return <span className="payment-status-pill">Unavailable</span>
   const tone = ['Confirmed', 'Complete'].includes(status)
     ? 'success'
-    : ['Pending', 'Not started'].includes(status) ? 'pending' : status === 'Failed' ? 'failed' : 'neutral'
+    : ['Pending', 'Not started', 'Awaiting activation'].includes(status) ? 'pending' : status === 'Failed' ? 'failed' : 'neutral'
 
   return (
     <span className={`payment-status-pill ${type}-${tone}`}>
       <span />{type === 'provisioning'
-        ? ({ Complete: 'Active', Failed: 'Activation Failed', 'Not started': 'Not Requested' })[status]
+        ? (({ Complete: 'Active', Failed: 'Activation Failed', 'Not started': 'Not Requested' })[status] ?? status)
         : status}
     </span>
   )
@@ -198,7 +204,7 @@ function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue, onOp
                   <section className="payment-detail-section">
                     <h3>Payment and access</h3>
                     <div className="payment-detail-status-row"><strong>Payment status</strong><StatusPill status={liveDetail.record.paymentStatus} /></div>
-                    <div className="payment-detail-status-row"><strong>Internet access</strong><StatusPill status="Unavailable" type="provisioning" /></div>
+                    <div className="payment-detail-status-row"><strong>Internet access</strong><StatusPill status={liveDetail.record.provisioningStatus} type="provisioning" /></div>
                   </section>
                   {liveDetail.record.failureReason && (
                     <section className="payment-detail-section"><h3>Failure reason</h3><p>{liveDetail.record.failureReason}</p></section>
@@ -207,6 +213,7 @@ function TransactionDrawer({ transaction, trigger, onClose, onInspectIssue, onOp
                     <h3>Transaction metadata</h3>
                     <dl className="payment-detail-grid">
                       <div><dt>Purchase ID</dt><dd>{liveDetail.record.purchaseId}</dd></div>
+                      {liveDetail.record.sessionId != null && <div><dt>Session ID</dt><dd>{liveDetail.record.sessionId}</dd></div>}
                       <div><dt>Phone</dt><dd>{liveDetail.record.phone}</dd></div>
                       <div><dt>M-Pesa receipt</dt><dd>{liveDetail.record.receipt || 'Unavailable'}</dd></div>
                       <div><dt>Checkout request ID</dt><dd>{liveDetail.record.reference || 'Unavailable'}</dd></div>
@@ -483,7 +490,7 @@ function PaymentsView({ accessToken, onSignOut, onInspectIssue, onOpenProfile, i
                   <td className="payment-monitor-amount-cell">{formatAmount(transaction.amount)}</td>
                   <td>{live ? transaction.time : transaction.time.split(', ')[1]}</td>
                   <td><StatusPill status={transaction.paymentStatus} /></td>
-                  <td><StatusPill status={live ? 'Unavailable' : transaction.provisioningStatus} type="provisioning" /></td>
+                  <td><StatusPill status={transaction.provisioningStatus} type="provisioning" /></td>
                   <td>
                     <button
                       type="button"

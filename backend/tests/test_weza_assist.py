@@ -41,6 +41,45 @@ def test_assist_hands_off_unsupported_answers(client, monkeypatch):
     assert result == {"answer": assist.FALLBACK, "sources": [], "handoff": True}
 
 
+def test_assist_hands_off_when_the_latest_question_changes_topic(client, monkeypatch):
+    monkeypatch.setenv("WEZA_ASSIST_MODEL", "fixture-model")
+    monkeypatch.delenv("WEZA_ASSIST_RESOURCES", raising=False)
+
+    def unexpected_model_call(*_):
+        raise AssertionError("An unrelated question should not borrow sources from earlier turns")
+
+    monkeypatch.setattr(assist, "ask_ollama", unexpected_model_call)
+    for earlier, reply in (
+        ("Hello", "Hi! Ask me about Weza packages, M-Pesa payments, or getting online."),
+        ("I paid but my internet is offline", "Check your connection status."),
+    ):
+        result = client.post("/api/support/assist", json={"messages": [
+            {"role": "user", "text": earlier},
+            {"role": "assistant", "text": reply},
+            {"role": "user", "text": "Could you help me with medieval pottery?"},
+        ]}).json()
+        assert result == {"answer": assist.FALLBACK, "sources": [], "handoff": True}
+
+
+def test_assist_keeps_payment_context_for_a_follow_up(client, monkeypatch):
+    monkeypatch.setenv("WEZA_ASSIST_MODEL", "fixture-model")
+    monkeypatch.delenv("WEZA_ASSIST_RESOURCES", raising=False)
+
+    def model(_, messages, sources):
+        assert messages[-1].text == "Should I pay again?"
+        faq = next(source for source in sources if source.title == "Payment received but no internet?")
+        return {"answer": "Check your connection status before trying another payment.", "source_ids": [faq.id]}
+
+    monkeypatch.setattr(assist, "ask_ollama", model)
+    result = client.post("/api/support/assist", json={"messages": [
+        {"role": "user", "text": "I paid but my internet is offline"},
+        {"role": "assistant", "text": "Check your connection status."},
+        {"role": "user", "text": "Should I pay again?"},
+    ]}).json()
+    assert not result["handoff"]
+    assert result["sources"] == [{"title": "Payment received but no internet?", "url": "/support"}]
+
+
 def test_public_sources_must_use_exact_approved_https_hosts(monkeypatch):
     monkeypatch.setenv("WEZA_ASSIST_RESOURCES", """[
         {"title": "Bad", "url": "https://www.safaricom.co.ke.evil.test/path"},
