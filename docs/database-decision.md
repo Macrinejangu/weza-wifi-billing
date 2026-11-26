@@ -19,14 +19,19 @@ Run `docker compose down` from the root to stop PostgreSQL and retain local data
 
 ## Run the database test
 
-With the Compose database running, load the local settings from the repo root. Use a development database for this check. The test checks the migration revision and writes only to a temporary table.
+The test checks the migration revision and writes only to a temporary table. Run it against a separate test database, never against the development database in `DATABASE_URL`.
+
+Create the test database once from the repo root. Replace `weza` with your `POSTGRES_USER` if you changed it:
 
 ```sh
-set -a
-. ./.env
-set +a
-export TEST_DATABASE_URL="$DATABASE_URL"
+docker compose exec db psql -U weza -d weza -c "CREATE DATABASE weza_test"
+```
+
+Then migrate it and run the test. Replace the password and port with your own values from `.env` if they differ from the sample:
+
+```sh
+export TEST_DATABASE_URL="postgresql+psycopg://weza:weza_local_only@127.0.0.1:5432/weza_test"
 cd backend
-python -m alembic upgrade head
+DATABASE_URL="$TEST_DATABASE_URL" python -m alembic upgrade head
 python -m pytest tests/test_db.py
 ```
