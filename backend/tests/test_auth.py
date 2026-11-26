@@ -72,6 +72,49 @@ def test_staff_can_read_payments_and_sessions(client, db, package):
     assert client.get("/api/payments?limit=0", headers=headers).status_code == 422
 
 
+def test_staff_payment_access_uses_the_linked_session_and_keeps_payment_status(client, db, user, package):
+    staff = add_user(db)
+    headers = {"Authorization": f"Bearer {create_token(staff.id)}"}
+    now = datetime.now(UTC)
+    expected = {}
+    for label, session_status, activation, expiry in (
+        ("activating", None, None, None),
+        ("active", "ACTIVE", "succeeded", now + timedelta(minutes=30)),
+        ("failed", "FAILED", "failed", None),
+        ("expired", "ACTIVE", "succeeded", now - timedelta(seconds=1)),
+        ("ended", "CANCELLED", "not_started", None),
+    ):
+        purchase = make_purchase(db, user, package, key=f"purchase-{label}")
+        payment = make_payment(db, purchase, checkout=f"checkout-{label}", status="successful")
+        payment.paid_at = now - timedelta(minutes=5)
+        session_id = None
+        if session_status:
+            session = WiFiSession(
+                payment_id=payment.id, user_id=user.id, package_id=package.id,
+                status=session_status, activation_status=activation, expires_at=expiry,
+                started_at=payment.paid_at if expiry is not None else None,
+            )
+            db.add(session)
+            db.flush()
+            session_id = session.id
+        expected[payment.id] = ("successful", label, session_id)
+
+    # A different payment for the same purchase must not inherit its session.
+    pending = make_payment(db, purchase, checkout="pending-for-same-purchase")
+    expected[pending.id] = ("pending", "unconfirmed", None)
+
+    response = client.get("/api/payments", headers=headers)
+    assert response.status_code == 200
+    records = response.json()
+    assert {
+        record["id"]: (record["status"], record["access_status"], record["session_id"])
+        for record in records
+    } == expected
+    assert client.get("/api/payments?status=pending&limit=1", headers=headers).json() == records[:1]
+    for record in records:
+        assert client.get(f"/api/payments/{record['id']}", headers=headers).json() == record
+
+
 def test_both_react_apps_are_allowed_by_cors(client):
     for origin in ("http://localhost:5173", "http://127.0.0.1:5174"):
         reply = client.options("/api/auth/login", headers={

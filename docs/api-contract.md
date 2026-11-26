@@ -4,6 +4,8 @@ FastAPI publishes the full request and response schemas at `/docs` and `/openapi
 
 Staff payment recovery routes are described in [payment recovery](payment-recovery.md).
 
+`GET /api/payments` and `GET /api/payments/{payment_id}` return the payment `status` and a separate `access_status` to signed-in staff. Access is `unconfirmed`, `activating`, `active`, `failed`, `expired` or `ended`. `session_id` identifies the session for this payment when one exists. Staff can use it to find the corresponding record in Sessions.
+
 ## Foundation API
 
 - `GET /health` returns HTTP 200 with `{"status":"ok"}`. This checks whether the API process responds.

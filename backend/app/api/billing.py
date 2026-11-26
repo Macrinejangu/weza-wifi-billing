@@ -25,6 +25,7 @@ from app.services.payment_service import create_payment
 from app.services.mpesa_payment_service import ensure_no_overlapping_payment
 from app.payments.payment_service_errors import AccessAlreadyReserved
 from app.services.purchase_service import create_purchase
+from app.services.session_service import connection_status
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["Purchases and Payments"])
@@ -188,21 +189,10 @@ def get_customer_connection(
     if paid and session is not None and session.subscription is not None:
         started = session.subscription.start_date
         expires = session.subscription.end_date
-    status = "unconfirmed"
-    if paid:
-        if (expires is not None and expires <= now) or (session and session.status == "EXPIRED"):
-            status = "expired"
-        elif session and session.status == "ACTIVE" and session.activation_status == "succeeded":
-            status = "active"
-        elif session and session.activation_status == "failed":
-            status = "failed"
-        else:
-            status = "activating"
-
     return CustomerConnectionRead(
         payment_id=payment.id,
         payment_status=payment.status,
-        access_status=status,
+        access_status=connection_status(paid, session, expires, now),
         package_name=purchase.package_name,
         mpesa_receipt_number=payment.mpesa_receipt_number if paid else None,
         started_at=started,

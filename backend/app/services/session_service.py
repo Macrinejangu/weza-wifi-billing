@@ -14,6 +14,21 @@ from app.services.access_auth import (
 from app.services.router import RouterActivationUnconfirmed, activate_hotspot_device
 
 
+def connection_status(
+    paid: bool, session: WiFiSession | None, expires_at: datetime | None, now: datetime,
+) -> str:
+    """Read access separately from payment and honor the paid deadline."""
+    if not paid:
+        return "unconfirmed"
+    if (expires_at is not None and expires_at <= now) or (session and session.status == "EXPIRED"):
+        return "expired"
+    if session and session.status == "ACTIVE" and session.activation_status == "succeeded":
+        return "active"
+    if session and session.activation_status == "failed":
+        return "failed"
+    return "activating"
+
+
 def create_session(
     db: Session,
     payment_id: int,
