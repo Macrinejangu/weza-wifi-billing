@@ -24,6 +24,17 @@ def router_mode_mock(monkeypatch):
     monkeypatch.setenv("ROUTER_MODE", "mock")
 
 
+@pytest.fixture(autouse=True)
+def sandbox_router_override_off(monkeypatch):
+    """Keep the live-router override closed unless a test opens it itself.
+
+    A developer may export ALLOW_SANDBOX_ROUTER_ACTIVATION=true for an isolated
+    lab. Tests must not inherit that from the shell, so they behave the same on
+    every machine.
+    """
+    monkeypatch.delenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", raising=False)
+
+
 @pytest.fixture
 def test_database():
     if not os.getenv("TEST_DATABASE_URL"):

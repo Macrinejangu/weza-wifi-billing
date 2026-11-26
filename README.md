@@ -107,7 +107,12 @@ Sessions to check its expired status. No money or router is involved in this mod
 
 For a separately configured lab with Daraja sandbox and MikroTik, turn mock
 payments off. Enable `ENABLE_DARAJA_SANDBOX_PAYMENTS` and
-`ENABLE_DIRECT_HOTSPOT_CHECKOUT`, and set `ROUTER_MODE=mikrotik`. The
+`ENABLE_DIRECT_HOTSPOT_CHECKOUT`, and set `ROUTER_MODE=mikrotik`. A sandbox
+payment opens the router only when `ALLOW_SANDBOX_ROUTER_ACTIVATION=true` is also
+set, in the root `.env` or in the shell of the lab machine. It defaults to
+`false` and must stay `false` everywhere except the isolated lab router,
+including CI. While it is off, activation is refused with "Sandbox payment cannot
+activate access on a live MikroTik router" and the router is not contacted. The
 customer build uses `VITE_ENABLE_SANDBOX_CHECKOUT=true`,
 `VITE_REQUIRE_HOTSPOT_DEVICE=true` and the test package ID. The customer API
 needs a direct connection from the hotspot device. Start Uvicorn with

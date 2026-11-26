@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Callable
 from uuid import uuid4
@@ -89,6 +90,15 @@ def create_session(
     return session
 
 
+def sandbox_router_activation_allowed() -> bool:
+    """Whether test money may open a real (isolated lab) router.
+
+    Daraja is sandbox-only here, so the default is closed. Only "true" opens it.
+    """
+    value = os.getenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", "false")
+    return value.strip().lower() == "true"
+
+
 def activate_session(
     db: Session,
     session_id: int,
@@ -134,7 +144,10 @@ def activate_session(
         except RuntimeError:
             # Activation reports configuration errors through the normal attempt.
             authenticator = None
-        if isinstance(authenticator, MikroTikAuthenticator):
+        if (
+            isinstance(authenticator, MikroTikAuthenticator)
+            and sandbox_router_activation_allowed()
+        ):
             origin = session.payment.raw_callback or {}
             if not origin.get("mock") and purchase.device_mac_address and session.router_grant_id is None:
                 session.router_grant_id = uuid4().hex
@@ -184,6 +197,15 @@ def activate_session(
             ):
                 raise RuntimeError(
                     "Mock payment cannot activate access on a live MikroTik router"
+                )
+
+            # Daraja is sandbox-only, so a verified payment is still test money.
+            if (
+                isinstance(authenticator, MikroTikAuthenticator)
+                and not sandbox_router_activation_allowed()
+            ):
+                raise RuntimeError(
+                    "Sandbox payment cannot activate access on a live MikroTik router"
                 )
 
             if isinstance(authenticator, MikroTikAuthenticator) and (
