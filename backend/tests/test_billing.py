@@ -6,7 +6,11 @@ from app.models import ActivationAttempt, Payment, User
 from app.services.mock_payment import process_mock_payment
 from app.services.payment_service import apply_payment_result, create_payment
 from app.services.purchase_service import create_purchase
-from app.services.session_service import activate_session, create_session
+from app.services.session_service import (
+    activate_session,
+    create_session,
+    sandbox_router_activation_allowed,
+)
 
 PHONE = "254712345678"
 
@@ -22,6 +26,18 @@ def staff_headers(db, monkeypatch):
 def paid_payment(db, user, package, ok=True):
     purchase, _ = create_purchase(db, user.id, package.id, "key-12345")
     return process_mock_payment(db, create_payment(db, purchase.id, PHONE).id, ok)
+
+
+def verified_device_session(db, user, package):
+    """A session for a verified (non-mock) payment on a purchase with a device."""
+    purchase, _ = create_purchase(
+        db, user.id, package.id, "key-12345",
+        device_mac="AA:BB:CC:DD:EE:FF", device_ip="10.20.0.254",
+    )
+    payment = process_mock_payment(db, create_payment(db, purchase.id, PHONE).id, True)
+    payment.raw_callback = {"test": "verified payment fixture"}
+    db.commit()
+    return create_session(db, payment.id)
 
 
 def test_checkout_binds_verified_device_to_session(db, user, package, monkeypatch):
@@ -198,6 +214,7 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     from app.services.router import RouterActivationUnconfirmed
 
     monkeypatch.setenv("ROUTER_MODE", "mikrotik")
+    monkeypatch.setenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", "true")
     purchase, _ = create_purchase(
         db, user.id, package.id, "key-12345",
         device_mac="AA:BB:CC:DD:EE:FF", device_ip="10.20.0.254",
@@ -241,3 +258,85 @@ def test_unconfirmed_activation_reuses_attempt_until_router_confirms(
     attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()
     assert attempt.status == "succeeded"
     assert attempt.completed_at is not None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, False),
+        ("", False),
+        ("false", False),
+        ("0", False),
+        ("yes", False),
+        ("1", False),
+        ("true", True),
+        ("TRUE", True),
+        (" true ", True),
+    ],
+)
+def test_sandbox_router_override_opens_only_for_true(monkeypatch, value, expected):
+    if value is None:
+        monkeypatch.delenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", raising=False)
+    else:
+        monkeypatch.setenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", value)
+    assert sandbox_router_activation_allowed() is expected
+
+
+@pytest.mark.parametrize("override", [None, "false", "", "1", "yes"])
+def test_sandbox_payment_cannot_open_a_live_router_without_the_override(
+    db, user, package, monkeypatch, override
+):
+    from app.services import session_service
+
+    monkeypatch.setenv("ROUTER_MODE", "mikrotik")
+    if override is None:
+        monkeypatch.delenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", raising=False)
+    else:
+        monkeypatch.setenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", override)
+    router_calls = []
+
+    def unexpected_router_call(**kwargs):
+        router_calls.append(kwargs)
+        raise AssertionError("A sandbox payment must not reach the router")
+
+    monkeypatch.setattr(session_service, "activate_hotspot_device", unexpected_router_call)
+    session = verified_device_session(db, user, package)
+
+    result = activate_session(db, session.id)
+
+    assert router_calls == []
+    assert result.status == "FAILED"
+    assert result.activation_status == "failed"
+    assert result.router_grant_id is None
+    assert "Sandbox payment cannot activate access" in result.failure_reason
+
+    attempt = db.query(ActivationAttempt).filter_by(session_id=session.id).one()
+    assert attempt.status == "failed"
+    assert "Sandbox payment cannot activate access" in attempt.error_message
+    assert attempt.completed_at is not None
+
+
+def test_sandbox_payment_reaches_the_router_when_the_override_is_true(
+    db, user, package, monkeypatch
+):
+    from app.services import session_service
+
+    monkeypatch.setenv("ROUTER_MODE", "mikrotik")
+    monkeypatch.setenv("ALLOW_SANDBOX_ROUTER_ACTIVATION", "true")
+    router_calls = []
+
+    def router_call(**kwargs):
+        router_calls.append(kwargs)
+        return {"status": "ACTIVE"}
+
+    monkeypatch.setattr(session_service, "activate_hotspot_device", router_call)
+    session = verified_device_session(db, user, package)
+
+    result = activate_session(db, session.id)
+
+    assert result.status == "ACTIVE"
+    assert result.activation_status == "succeeded"
+    assert result.router_grant_id is not None
+    assert len(router_calls) == 1
+    assert router_calls[0]["grant_id"] == result.router_grant_id
+    assert router_calls[0]["mac_address"] == "AA:BB:CC:DD:EE:FF"
