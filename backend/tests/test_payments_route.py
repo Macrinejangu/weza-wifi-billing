@@ -109,8 +109,11 @@ def stored_status(db, payment_id) -> str:
 
 @pytest.mark.parametrize("setting", [None, "false"])
 def test_disabled_payments_stop_before_building_daraja_client(
-    client, db, purchase, monkeypatch, setting
+    client, db, purchase, monkeypatch, tmp_path, setting
 ):
+    # The gate calls load_dotenv(ROOT_ENV), which would restore the flag from
+    # the real .env. Point it at a missing file so only the test's setting counts.
+    monkeypatch.setattr(payments_route, "ROOT_ENV", tmp_path / "missing.env")
     if setting is None:
         monkeypatch.delenv("ENABLE_DARAJA_SANDBOX_PAYMENTS", raising=False)
     else:
