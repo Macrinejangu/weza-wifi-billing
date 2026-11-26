@@ -13,7 +13,7 @@ Staff payment recovery routes are described in [payment recovery](payment-recove
 
 ## Local activation demo
 
-Use a local PostgreSQL database migrated with `python -m alembic upgrade head` from `backend/`. Set `ENABLE_MOCK_PAYMENTS=true` only in the local demo environment and use fixture users and phone numbers. The demo routes return HTTP 404 when disabled.
+Use a local PostgreSQL database migrated with `python -m alembic upgrade head` from `backend/`. Set `ENABLE_MOCK_PAYMENTS=true` only in the local demo environment and use fixture users and phone numbers. `POST /api/payments/mock` and the `/api/sessions` routes exist only while this switch is on. They return HTTP 404 when it is off. These routes are not protected by customer sign-in, so keep the switch off whenever the backend is reachable through a tunnel.
 
 Set a unique random `JWT_SECRET` in the root `.env` and run `python -m app.create_staff` from `backend/` to create a staff account.
 
@@ -100,8 +100,10 @@ Every error from this endpoint has this body, which differs from the plain `{"de
 
 | HTTP | `code` | Meaning | Payment row afterwards |
 | --- | --- | --- | --- |
-| 404 | `purchase_not_found` | No such purchase. | none |
+| 404 | `purchase_not_found` | No such purchase, or it belongs to another customer. | none |
 | 409 | `purchase_not_payable` | Purchase is not pending (paid, failed or expired). | none |
+| 409 | `access_already_reserved` | A separate purchase for this account or device still has a payment or paid access in progress. Check the existing purchase before paying again. | none |
+| 409 | `hotspot_device_required` | `ROUTER_MODE=mikrotik` and the saved purchase has no device MAC address or no device IP address. The customer must connect to Weza Wi-Fi and verify the device first. | none |
 | 409 | `payment_already_pending` | A payment is already pending for this purchase (double tap). Use the returned `payment_id`. | existing one, unchanged |
 | 502 | `provider_rejected` | Daraja refused the request. Daraja's own codes are never shown to clients. | `failed` |
 | 503 | `provider_not_reached` | No prompt was sent (for example, no access token). | `failed` |
@@ -126,10 +128,14 @@ The client must never create a second payment after `outcome_unknown`. The first
 
 Payment status is separate from activation status. `successful` never means the internet is active.
 
-### Known gaps
+### Sandbox payments and router access
 
-- There is no customer login yet. Anyone who guesses a purchase id could trigger a prompt for it. An ownership check is needed once customer authentication exists.
-- Device verification before the prompt (WEZA-53) is not wired in yet.
+A Daraja sandbox payment never opens a live router on its own. With `ROUTER_MODE=mikrotik`, session activation for a sandbox payment is refused unless `ALLOW_SANDBOX_ROUTER_ACTIVATION=true`. The refused session ends as `FAILED` with `activation_status` `failed`, the failure reason "Sandbox payment cannot activate access on a live MikroTik router", and the router is not contacted.
+
+- The setting defaults to `false`. Only the value `true` opens it (case and surrounding spaces are ignored).
+- Set it in the root `.env` or in the shell of the lab machine. Keep it `false` everywhere else, including CI.
+- A mock payment is always refused on a MikroTik router, whatever this setting says.
+- No route lets a client authorize a router directly.
 
 ## POST /api/payments/mpesa/callback/{token}
 
