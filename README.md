@@ -4,28 +4,21 @@ Weza Wi-Fi Billing System. This repository contains two React apps, a shared Fas
 
 ## Repository layout
 
-```text
-apps/
-  customer-portal/        Customer-facing React/Vite app
-  operator-dashboard/     Staff React/Vite app
-backend/
-  app/
-    api/                  HTTP routes
-    config.py             Environment and configuration
-    db/                   PostgreSQL connection
-  migrations/             Alembic revisions
-  tests/                  FastAPI tests
-  pyproject.toml          Backend and test dependencies
-docs/
-  database-decision.md             PostgreSQL and migration workflow
-  api-contract.md        Current API contract
-  contributing.md        Jira branches and pull requests
-.env.example              Local environment template
-compose.yaml              Local PostgreSQL service
-.github/workflows/ci.yml  Pull request checks
-package.json              Frontend workspace scripts
-package-lock.json         Shared frontend dependency lockfile
-```
+| Path | What lives there |
+| --- | --- |
+| `apps/customer-portal/src/` | Customer portal pages, layouts, and Weza Assist |
+| `apps/operator-dashboard/src/` | Administrator and operator pages and layouts |
+| `apps/shared/` | Frontend code used by both portals |
+| `backend/app/api/` | Customer, staff, and payment API routes |
+| `backend/app/config.py` | Backend environment settings |
+| `backend/app/db/` and `backend/app/models/` | PostgreSQL connections and data models |
+| `backend/app/services/` | Business logic for purchases, payments, access, and router operations |
+| `backend/migrations/` and `backend/tests/` | Database updates and backend tests |
+| `backend/pyproject.toml` | Backend and test dependencies |
+| `docs/` | API contracts, setup guides, and handover checks |
+| `.env.example` and `compose.yaml` | Root environment template and local PostgreSQL setup |
+| `package.json` and `package-lock.json` | Shared frontend scripts and dependencies |
+| `.github/workflows/ci.yml` | Pull request checks |
 
 ## Batch 1 · Clone and install
 
